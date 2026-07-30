@@ -1,0 +1,41 @@
+.queue{
+    margin-top:24px;
+}
+
+.queue__header h3{
+    margin-bottom:16px;
+    color:white;
+    font-size:16px;
+}
+
+.queue__item{
+    margin-bottom:18px;
+}
+
+.queue__top{
+    display:flex;
+    justify-content:space-between;
+    color:white;
+    margin-bottom:8px;
+    font-size:14px;
+}
+
+.queue__bar{
+    width:100%;
+    height:8px;
+    border-radius:999px;
+    overflow:hidden;
+    background:rgba(255,255,255,.08);
+}
+
+.queue__fill{
+    height:100%;
+    border-radius:999px;
+    background:linear-gradient(90deg,#6d5dfc,#9b8cff);
+}
+
+.queue__status{
+    margin-top:8px;
+    font-size:12px;
+    color:#9ca3af;
+}

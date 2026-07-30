@@ -1,0 +1,6 @@
+Folder PATH listing
+Volume serial number is BE0B-21E4
+D:\PROJECTS\SCRIPTLOOM\FRONTEND\FRONTEND
+Invalid path - \PROJECTS\SCRIPTLOOM\FRONTEND\FRONTEND
+No subfolders exist 
+

@@ -1,0 +1,9 @@
+.features {
+  padding: 8rem 2rem;
+  text-align: center;
+}
+
+.features h2 {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 700;
+}
