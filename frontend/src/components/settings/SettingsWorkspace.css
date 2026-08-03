@@ -1,0 +1,157 @@
+.settingsWorkspace {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settingsWorkspace__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.settingsWorkspace__header h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0F172A;
+}
+
+.settingsWorkspace__header p {
+  font-size: 14px;
+  color: #64748B;
+  margin-top: 4px;
+}
+
+.settingsWorkspace__saveBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: #4F46E5;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settingsWorkspace__saveBtn:hover {
+  background: #4338CA;
+}
+
+.settingsWorkspace__tabs {
+  display: flex;
+  gap: 10px;
+
+}
+
+.settingsWorkspace__tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748B;
+  cursor: pointer;
+}
+
+.settingsWorkspace__tab.tab--active {
+  background: #EEF2FF;
+  border-color: #C7D2FE;
+  color: #4F46E5;
+}
+
+.settingsWorkspace__card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.settingsWorkspace__pane {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 600px;
+}
+
+.settingsWorkspace__pane h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0F172A;
+}
+
+.settingsWorkspace__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settingsWorkspace__field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.settingsWorkspace__field input,
+.settingsWorkspace__field select,
+.settingsWorkspace__field textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #CBD5E1;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #0F172A;
+  outline: none;
+}
+
+.settingsWorkspace__planCard {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: #FEF3C7;
+  border: 1px solid #FDE68A;
+  border-radius: 14px;
+  color: #92400E;
+}
+
+.settingsWorkspace__planCard h4 {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.settingsWorkspace__planCard p {
+  font-size: 13px;
+}
+
+.settingsWorkspace__usageBar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settingsWorkspace__usageInfo {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #475569;
+}
+
+.settingsWorkspace__track {
+  width: 100%;
+  height: 8px;
+  border-radius: 9999px;
+  background: #E2E8F0;
+  overflow: hidden;
+}
+
+.settingsWorkspace__fill {
+  height: 100%;
+  background: #4F46E5;
+}

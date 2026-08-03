@@ -1,6 +1,10 @@
 .appDashboard {
   min-height: 100vh;
   background-color: #F8FAFC;
+  background-image: 
+    radial-gradient(rgba(99, 102, 241, 0.1) 1.2px, transparent 1.2px),
+    radial-gradient(at 0% 0%, rgba(238, 242, 255, 0.6) 0px, transparent 45%);
+  background-size: 32px 32px, 100% 100%;
   color: #0F172A;
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   display: flex;
@@ -152,6 +156,148 @@
 
 .appDashboard__btnUpgrade:hover {
   background: #F3E8FF;
+}
+
+/* User Profile Account Menu */
+.appDashboard__profileWrapper {
+  position: relative;
+}
+
+.appDashboard__profileBtn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.appDashboard__profileBtn:hover {
+  background: #F8FAFC;
+  border-color: #CBD5E1;
+}
+
+.appDashboard__avatarImg {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #6366F1;
+}
+
+.appDashboard__profileText {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.appDashboard__profileText strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0F172A;
+  line-height: 1.2;
+}
+
+.appDashboard__profileText span {
+  font-size: 11px;
+  color: #64748B;
+}
+
+.appDashboard__profileDropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 240px;
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+
+.appDashboard__dropdownHeader {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.appDashboard__dropdownHeader strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0F172A;
+}
+
+.appDashboard__dropdownHeader p {
+  font-size: 12px;
+  color: #64748B;
+}
+
+.appDashboard__planBadge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #10B981;
+  background: #ECFDF5;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  margin-top: 6px;
+  align-self: flex-start;
+}
+
+.appDashboard__dropdownDivider {
+  height: 1px;
+  background: #F1F5F9;
+  margin: 4px 0;
+}
+
+.appDashboard__dropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.appDashboard__dropdownItem:hover {
+  background: #F1F5F9;
+  color: #4F46E5;
+}
+
+.appDashboard__logoutBtn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #EF4444;
+  background: #FEF2F2;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.appDashboard__logoutBtn:hover {
+  background: #FEE2E2;
 }
 
 /* Layout */

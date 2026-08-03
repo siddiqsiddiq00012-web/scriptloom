@@ -1,15 +1,14 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import "./Hero.css";
 import Navbar from "./Navbar";
-import AppDrawer from "./AppDrawer";
-import WorkspaceView from "./WorkspaceView";
 import DemoModal from "../modals/DemoModal";
 import UploadModal from "../modals/UploadModal";
 import UpgradeModal from "../modals/UpgradeModal";
 import { ArrowRight, Play, CheckCircle2, Zap, Target, Sparkles } from "lucide-react";
 
 function Hero() {
-  const [isDrawerOpen, setIsDrawerOpen] = useState(true);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("dashboard");
 
   // Modals state
@@ -29,36 +28,43 @@ function Hero() {
       <Navbar onToggleDrawer={() => setIsDrawerOpen(!isDrawerOpen)} />
 
       <section className="hero">
-        <div className="hero__mainGrid">
+        <div className={`hero__mainGrid ${!isDrawerOpen ? "hero__mainGrid--fullWidth" : ""}`}>
           {/* Left / Center Main Content */}
           <div className="hero__centerContent">
             {/* Top AI Badge */}
             <div className="hero__badge" onClick={() => setIsDemoOpen(true)}>
               <Sparkles size={14} className="hero__badgeIcon" />
-              <span>AI-Powered Content Repurposing</span>
+              <span>🚀 #1 Content OS for Creators & Personal Brands</span>
             </div>
 
             {/* Main Headline */}
             <h1 className="hero__title">
-              Create once.
+              Turn Any Idea or Recording into a
               <br />
-              <span className="hero__titleHighlight">Publish</span> everywhere.
+              <span className="hero__titleHighlight">Multi-Platform Content Empire.</span>
             </h1>
 
             {/* Subtitle */}
             <p className="hero__subtitle">
-              Scriptloom transforms your content into scroll-stopping posts,
-              captions, and clips for every platform — in minutes.
+              Scriptloom generates viral LinkedIn Carousels, X Threads, Substack Newsletters, and Short-Form Video Scripts from your voice, text notes, or videos — perfectly aligned with your authentic brand voice.
             </p>
 
             {/* Action Buttons */}
             <div className="hero__actions">
-              <button
+              <Link
+                to="/dashboard"
                 className="hero__btnPrimary"
+                style={{ textDecoration: "none" }}
+              >
+                <span>Launch Content Studio</span>
+                <ArrowRight size={18} />
+              </Link>
+
+              <button
+                className="hero__btnSecondary"
                 onClick={() => setIsUploadOpen(true)}
               >
-                <span>Get Started for Free</span>
-                <ArrowRight size={18} />
+                <span>Create Campaign Pack</span>
               </button>
 
               <button
@@ -68,7 +74,7 @@ function Hero() {
                 <div className="hero__playCircle">
                   <Play size={14} className="hero__playIcon" />
                 </div>
-                <span>Watch Demo</span>
+                <span>Watch Product Tour</span>
               </button>
             </div>
 
@@ -76,17 +82,17 @@ function Hero() {
             <div className="hero__benefits">
               <div className="hero__benefitItem" onClick={() => setIsUploadOpen(true)}>
                 <CheckCircle2 size={16} className="hero__checkIcon" />
-                <span>No credit card required</span>
+                <span>LinkedIn, X, Substack & Reels Ready</span>
               </div>
 
               <div className="hero__benefitItem" onClick={() => setIsUploadOpen(true)}>
                 <CheckCircle2 size={16} className="hero__checkIcon" />
-                <span>Free forever plan</span>
+                <span>Personal Brand Voice Guard</span>
               </div>
 
               <div className="hero__benefitItem" onClick={() => setIsUploadOpen(true)}>
                 <CheckCircle2 size={16} className="hero__checkIcon" />
-                <span>Cancel anytime</span>
+                <span>1-Click Multi-Asset Generator</span>
               </div>
             </div>
 
@@ -155,27 +161,7 @@ function Hero() {
                 <span className="hero__usersText">Happy users</span>
               </div>
             </div>
-
-            {/* Dynamic Interactive Workspace View */}
-            <WorkspaceView
-              activeTab={activeTab}
-              onOpenUpload={() => setIsUploadOpen(true)}
-              onOpenUpgrade={() => setIsUpgradeOpen(true)}
-            />
           </div>
-
-          {/* Right Floating Drawer Navigation */}
-          {isDrawerOpen && (
-            <div className="hero__rightDrawerArea">
-              <AppDrawer
-                isOpen={isDrawerOpen}
-                onClose={() => setIsDrawerOpen(false)}
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-                onOpenUpgrade={() => setIsUpgradeOpen(true)}
-              />
-            </div>
-          )}
         </div>
       </section>
 

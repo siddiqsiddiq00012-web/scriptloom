@@ -10,22 +10,93 @@ import {
   ChevronRight,
   Copy,
   Check,
-  Zap,
   BookOpen,
   Send,
   Video,
   Globe,
+  AlertCircle,
+  FileAudio,
 } from "lucide-react";
+import { uploadMediaFile, transcribeMedia } from "../../api/media";
+import { progressStream } from "../../services/progressStream";
 
 function UploadModal({ isOpen, onClose }) {
-  const [stage, setStage] = useState("upload"); // 'upload' | 'processing' | 'results'
+  const [stage, setStage] = useState("upload"); // 'upload' | 'confirm' | 'processing' | 'results'
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [pastedUrl, setPastedUrl] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [activeTab, setActiveTab] = useState("carousel"); // 'script' | 'carousel' | 'newsletter'
+  const [activeTab, setActiveTab] = useState("carousel"); // 'carousel' | 'script' | 'newsletter'
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [copied, setCopied] = useState(false);
-  const [pastedUrl, setPastedUrl] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+
+  // Live Backend Data
+  const [uploadedMedia, setUploadedMedia] = useState(null);
+  const [transcriptData, setTranscriptData] = useState(null);
+
+  const fileInputRef = React.useRef(null);
+
+  React.useEffect(() => {
+    const handleStreamUpdate = (msg) => {
+      if (msg.type === "event" && msg.data?.payload?.progress) {
+        setUploadProgress(msg.data.payload.progress);
+      }
+    };
+    progressStream.subscribe(handleStreamUpdate);
+    return () => progressStream.unsubscribe(handleStreamUpdate);
+  }, []);
 
   if (!isOpen) return null;
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      setStage("confirm");
+      setErrorMessage("");
+    }
+  };
+
+  const handleStartProcessing = async () => {
+    if (!selectedFile && !pastedUrl) return;
+
+    setStage("processing");
+    setUploadProgress(20);
+    setErrorMessage("");
+
+    try {
+      if (selectedFile) {
+        setUploadProgress(40);
+        const media = await uploadMediaFile(1, selectedFile);
+        setUploadedMedia(media);
+
+        // Connect SSE progress stream
+        progressStream.connect(media.id);
+        setUploadProgress(70);
+
+        const transcript = await transcribeMedia(media.id);
+        setTranscriptData(transcript);
+        setUploadProgress(100);
+        setStage("results");
+      } else if (pastedUrl) {
+        setUploadProgress(50);
+        setTimeout(() => {
+          setUploadProgress(100);
+          setStage("results");
+        }, 1200);
+      }
+    } catch (err) {
+      console.error("Upload & Processing error:", err);
+      setErrorMessage(err.message || "Failed to process media file on live server.");
+      setStage("confirm");
+    }
+  };
+
+  const handleCopy = (text) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const carouselSlides = [
     {
@@ -62,27 +133,6 @@ function UploadModal({ isOpen, onClose }) {
     },
   ];
 
-  const handleStartUpload = () => {
-    setStage("processing");
-    setUploadProgress(0);
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setStage("results");
-          return 100;
-        }
-        return prev + 25;
-      });
-    }, 400);
-  };
-
-  const handleCopy = (text) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
     <div className="uploadModal__overlay" onClick={onClose}>
       <div className="uploadModal__container" onClick={(e) => e.stopPropagation()}>
@@ -96,6 +146,8 @@ function UploadModal({ isOpen, onClose }) {
             <h2>
               {stage === "results"
                 ? "Zero-Edit Campaign Pack Ready"
+                : stage === "confirm"
+                ? "Confirm Recording File"
                 : "Ingest Unscripted Expertise"}
             </h2>
           </div>
@@ -106,23 +158,39 @@ function UploadModal({ isOpen, onClose }) {
 
         {/* Modal Body */}
         <div className="uploadModal__body">
-          {/* UPLOAD STAGE */}
+          {errorMessage && (
+            <div className="uploadModal__errorBanner">
+              <AlertCircle size={16} />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
+          {/* STAGE 1: FILE SELECT */}
           {stage === "upload" && (
             <div className="uploadModal__uploadStage">
               <div
                 className="uploadModal__dropZone"
-                onClick={handleStartUpload}
+                onClick={() => fileInputRef.current?.click()}
               >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="audio/*,video/*,.mp4,.mov,.mp3,.wav,.m4a"
+                  onChange={handleFileChange}
+                  style={{ display: "none" }}
+                />
                 <div className="uploadModal__dropIconBox">
                   <UploadCloud size={32} />
                 </div>
-                <h3>Drop your Recording or Podcast here</h3>
-                <p>Supports MP4, MOV, MP3, WAV or Zoom Cloud exports (up to 4GB)</p>
-                <button className="uploadModal__selectBtn">Select Recording</button>
+                <h3>Select your Recording or Podcast File</h3>
+                <p>Click here to choose an MP4, MOV, MP3, or WAV file (up to 4GB)</p>
+                <span className="uploadModal__selectBtn">
+                  Select Recording File
+                </span>
               </div>
 
               <div className="uploadModal__divider">
-                <span>OR PASTE URL</span>
+                <span>OR PASTE RECORDING URL</span>
               </div>
 
               <div className="uploadModal__urlInputGroup">
@@ -135,7 +203,7 @@ function UploadModal({ isOpen, onClose }) {
                 />
                 <button
                   className="uploadModal__urlSubmitBtn"
-                  onClick={handleStartUpload}
+                  onClick={() => pastedUrl && setStage("confirm")}
                 >
                   Process URL
                 </button>
@@ -143,14 +211,54 @@ function UploadModal({ isOpen, onClose }) {
             </div>
           )}
 
-          {/* PROCESSING STAGE */}
+          {/* STAGE 2: CONFIRM FILE SELECTION */}
+          {stage === "confirm" && (
+            <div className="uploadModal__confirmStage">
+              <div className="uploadModal__fileCard">
+                <div className="uploadModal__fileIconBox">
+                  {selectedFile?.name?.endsWith(".mp4") ? (
+                    <FileVideo size={28} color="#4F46E5" />
+                  ) : (
+                    <FileAudio size={28} color="#8B5CF6" />
+                  )}
+                </div>
+                <div className="uploadModal__fileDetails">
+                  <strong>{selectedFile ? selectedFile.name : "Zoom Cloud Recording URL"}</strong>
+                  <p>
+                    {selectedFile
+                      ? `${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB • Ready for Voice DNA extraction`
+                      : pastedUrl}
+                  </p>
+                </div>
+                <button
+                  className="uploadModal__changeFileBtn"
+                  onClick={() => {
+                    setSelectedFile(null);
+                    setStage("upload");
+                  }}
+                >
+                  Change File
+                </button>
+              </div>
+
+              <button
+                className="uploadModal__startProcessBtn"
+                onClick={handleStartProcessing}
+              >
+                <Sparkles size={18} />
+                <span>Upload & Extract Spoken Knowledge</span>
+              </button>
+            </div>
+          )}
+
+          {/* STAGE 3: PROCESSING STAGE */}
           {stage === "processing" && (
             <div className="uploadModal__processingStage">
               <div className="uploadModal__spinnerCircle">
                 <Sparkles size={28} className="uploadModal__sparkleAnim" />
               </div>
-              <h3>Analyzing Spoken Dialogue...</h3>
-              <p>Diarizing speakers & matching against Voice DNA & Brand Memory</p>
+              <h3>Processing Recording on Live Server...</h3>
+              <p>Extracting 16kHz mono WAV, diarizing speakers & executing Voice DNA rules</p>
 
               <div className="uploadModal__progressBarTrack">
                 <div
@@ -160,31 +268,28 @@ function UploadModal({ isOpen, onClose }) {
               </div>
 
               <div className="uploadModal__processingSteps">
-                <div className={uploadProgress >= 25 ? "step--done" : ""}>
-                  <CheckCircle2 size={16} /> Speaker Attribution & Diarization
+                <div className={uploadProgress >= 20 ? "step--done" : ""}>
+                  <CheckCircle2 size={16} /> File Upload & Verification
                 </div>
                 <div className={uploadProgress >= 50 ? "step--done" : ""}>
+                  <CheckCircle2 size={16} /> Speaker Attribution & Diarization
+                </div>
+                <div className={uploadProgress >= 70 ? "step--done" : ""}>
                   <CheckCircle2 size={16} /> Voice DNA Cadence & Jargon Filter
                 </div>
-                <div className={uploadProgress >= 75 ? "step--done" : ""}>
-                  <CheckCircle2 size={16} /> Brand Memory Index Cross-Reference
-                </div>
                 <div className={uploadProgress >= 100 ? "step--done" : ""}>
-                  <CheckCircle2 size={16} /> Campaign Pack Generation
+                  <CheckCircle2 size={16} /> Campaign Pack Generation Complete
                 </div>
               </div>
             </div>
           )}
 
-          {/* RESULTS / CAMPAIGN PACK STAGE */}
+          {/* STAGE 4: RESULTS STAGE */}
           {stage === "results" && (
             <div className="uploadModal__resultsStage">
-              {/* Asset Tabs */}
               <div className="uploadModal__assetTabs">
                 <button
-                  className={`uploadModal__tabBtn ${
-                    activeTab === "carousel" ? "uploadModal__tabBtn--active" : ""
-                  }`}
+                  className={`uploadModal__tabBtn ${activeTab === "carousel" ? "uploadModal__tabBtn--active" : ""}`}
                   onClick={() => setActiveTab("carousel")}
                 >
                   <BookOpen size={16} />
@@ -192,9 +297,7 @@ function UploadModal({ isOpen, onClose }) {
                 </button>
 
                 <button
-                  className={`uploadModal__tabBtn ${
-                    activeTab === "script" ? "uploadModal__tabBtn--active" : ""
-                  }`}
+                  className={`uploadModal__tabBtn ${activeTab === "script" ? "uploadModal__tabBtn--active" : ""}`}
                   onClick={() => setActiveTab("script")}
                 >
                   <Video size={16} />
@@ -202,9 +305,7 @@ function UploadModal({ isOpen, onClose }) {
                 </button>
 
                 <button
-                  className={`uploadModal__tabBtn ${
-                    activeTab === "newsletter" ? "uploadModal__tabBtn--active" : ""
-                  }`}
+                  className={`uploadModal__tabBtn ${activeTab === "newsletter" ? "uploadModal__tabBtn--active" : ""}`}
                   onClick={() => setActiveTab("newsletter")}
                 >
                   <Send size={16} />
@@ -212,7 +313,6 @@ function UploadModal({ isOpen, onClose }) {
                 </button>
               </div>
 
-              {/* Tab 1: LinkedIn Carousel Preview */}
               {activeTab === "carousel" && (
                 <div className="uploadModal__tabView">
                   <div className="uploadModal__carouselViewer">
@@ -243,11 +343,7 @@ function UploadModal({ isOpen, onClose }) {
                       <span>{carouselIndex + 1} / {carouselSlides.length}</span>
                       <button
                         disabled={carouselIndex === carouselSlides.length - 1}
-                        onClick={() =>
-                          setCarouselIndex((prev) =>
-                            Math.min(carouselSlides.length - 1, prev + 1)
-                          )
-                        }
+                        onClick={() => setCarouselIndex((prev) => Math.min(carouselSlides.length - 1, prev + 1))}
                       >
                         Next <ChevronRight size={18} />
                       </button>
@@ -257,20 +353,15 @@ function UploadModal({ isOpen, onClose }) {
                   <div className="uploadModal__tabActions">
                     <button
                       className="uploadModal__primaryCopyBtn"
-                      onClick={() =>
-                        handleCopy(
-                          JSON.stringify(carouselSlides[carouselIndex], null, 2)
-                        )
-                      }
+                      onClick={() => handleCopy(JSON.stringify(carouselSlides[carouselIndex], null, 2))}
                     >
                       {copied ? <Check size={16} /> : <Copy size={16} />}
-                      <span>{copied ? "Copied Slide Data!" : "Copy PDF Carousel"}</span>
+                      <span>{copied ? "Copied Slide Data!" : "Copy Carousel Slide"}</span>
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Tab 2: Camera Script View */}
               {activeTab === "script" && (
                 <div className="uploadModal__tabView">
                   <div className="uploadModal__scriptBox">
@@ -279,26 +370,12 @@ function UploadModal({ isOpen, onClose }) {
                       <span>Estimated Duration: 45s</span>
                     </div>
                     <p className="uploadModal__scriptText">
-                      "Stop converting B2B buyers with generic AI slop. When every company produces
-                      low-context LLM prose, authentic spoken insight becomes your only defensible
-                      commercial strategy..."
-                    </p>
-                    <div className="uploadModal__scriptHeader" style={{ marginTop: "16px" }}>
-                      <strong>Hook Option B (Counter-Intuitive)</strong>
-                    </div>
-                    <p className="uploadModal__scriptText">
-                      "Your webinars contain 10x more positioning clarity than your landing pages.
-                      Here is how we turn a 60-minute recorded session into an entire month's content
-                      engine..."
+                      "Stop converting B2B buyers with generic AI slop. When every company produces low-context LLM prose, authentic spoken insight becomes your only defensible commercial strategy..."
                     </p>
                   </div>
                   <button
                     className="uploadModal__primaryCopyBtn"
-                    onClick={() =>
-                      handleCopy(
-                        "Hook Option A: Stop converting B2B buyers with generic AI slop..."
-                      )
-                    }
+                    onClick={() => handleCopy("Stop converting B2B buyers with generic AI slop...")}
                   >
                     {copied ? <Check size={16} /> : <Copy size={16} />}
                     <span>{copied ? "Copied Script!" : "Copy Teleprompter Script"}</span>
@@ -306,27 +383,19 @@ function UploadModal({ isOpen, onClose }) {
                 </div>
               )}
 
-              {/* Tab 3: Executive Newsletter */}
               {activeTab === "newsletter" && (
                 <div className="uploadModal__tabView">
                   <div className="uploadModal__scriptBox">
                     <h3>Subject: The End of Commodity Marketing</h3>
                     <p className="uploadModal__scriptText">
                       Dear Reader,<br /><br />
-                      This week on our internal strategy call, we unpacked why modern B2B buyers are
-                      completely immune to generic AI articles.<br /><br />
-                      <strong>Key Insight:</strong> Software buyers don't buy features—they buy proof of
-                      domain authority. When expertise is trapped in linear 1GB Zoom files, your marketing
-                      team loses 95% of your intellectual property.<br /><br />
-                      Best,<br />
-                      Founder & CEO
+                      This week on our internal strategy call, we unpacked why modern B2B buyers are completely immune to generic AI articles.<br /><br />
+                      <strong>Key Insight:</strong> Software buyers don't buy features—they buy proof of domain authority.
                     </p>
                   </div>
                   <button
                     className="uploadModal__primaryCopyBtn"
-                    onClick={() =>
-                      handleCopy("Subject: The End of Commodity Marketing...")
-                    }
+                    onClick={() => handleCopy("Subject: The End of Commodity Marketing...")}
                   >
                     {copied ? <Check size={16} /> : <Copy size={16} />}
                     <span>{copied ? "Copied Newsletter!" : "Copy Markdown Essay"}</span>

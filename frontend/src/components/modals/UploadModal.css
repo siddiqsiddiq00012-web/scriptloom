@@ -74,12 +74,19 @@
 
 /* Upload Stage */
 .uploadModal__dropZone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  box-sizing: border-box;
   border: 2px dashed #C7D2FE;
   border-radius: 20px;
   padding: 40px 20px;
   text-align: center;
   background: #FAF9FF;
   cursor: pointer;
+  outline: none;
   transition: all 0.25s ease;
 }
 
@@ -98,7 +105,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 16px;
+  margin-bottom: 16px;
   box-shadow: 0 8px 20px rgba(79, 70, 229, 0.15);
 }
 
@@ -116,6 +123,9 @@
 }
 
 .uploadModal__selectBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 12px 24px;
   border-radius: 12px;
   background: #4F46E5;
@@ -124,6 +134,7 @@
   font-weight: 600;
   box-shadow: 0 6px 18px rgba(79, 70, 229, 0.25);
   transition: all 0.2s ease;
+  user-select: none;
 }
 
 .uploadModal__divider {
@@ -189,6 +200,94 @@
 
 .uploadModal__urlSubmitBtn:hover {
   background: #E0E7FF;
+}
+
+/* Confirm Stage & File Card */
+.uploadModal__confirmStage {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.uploadModal__fileCard {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+}
+
+.uploadModal__fileIconBox {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: #EEF2FF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.uploadModal__fileDetails {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.uploadModal__fileDetails strong {
+  font-size: 15px;
+  color: #0F172A;
+}
+
+.uploadModal__fileDetails p {
+  font-size: 13px;
+  color: #64748B;
+}
+
+.uploadModal__changeFileBtn {
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.uploadModal__startProcessBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 14px;
+  background: #4F46E5;
+  color: #FFFFFF;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 10px 25px rgba(79, 70, 229, 0.25);
+  transition: background 0.2s ease;
+}
+
+.uploadModal__startProcessBtn:hover {
+  background: #4338CA;
+}
+
+.uploadModal__errorBanner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #FEF2F2;
+  border: 1px solid #FCA5A5;
+  border-radius: 12px;
+  color: #991B1B;
+  font-size: 13px;
+  margin-bottom: 16px;
 }
 
 /* Processing Stage */

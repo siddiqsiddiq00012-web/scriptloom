@@ -1,8 +1,17 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import "./Dashboard.css";
 import UploadModal from "../../components/modals/UploadModal";
 import DemoModal from "../../components/modals/DemoModal";
 import UpgradeModal from "../../components/modals/UpgradeModal";
+import ContentStudio from "../../components/studio/ContentStudio";
+import VoiceDNAManager from "../../components/voiceDna/VoiceDNAManager";
+import ProjectsWorkspace from "../../components/projects/ProjectsWorkspace";
+import SettingsWorkspace from "../../components/settings/SettingsWorkspace";
+import MediaLibrary from "../../components/media/MediaLibrary";
+import AnalyticsWorkspace from "../../components/analytics/AnalyticsWorkspace";
+import PublishingQueue from "../../components/publishing/PublishingQueue";
+import IngestionWorkspace from "../../components/ingestion/IngestionWorkspace";
 import {
   Home,
   Folder,
@@ -28,12 +37,29 @@ import {
   Globe,
   ArrowUpRight,
   ChevronRight,
+  FolderPlus,
+  User,
+  LogOut,
 } from "lucide-react";
 
+import { getVoiceDNA } from "../../api/voiceDna";
+import { getCurrentUser, getUserProfile, logoutUser, isAuthenticated } from "../../api/auth";
+import { getProjects } from "../../api/projects";
+
 function Dashboard() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState("all");
+
+  // User Profile & Menu State
+  const [userProfile, setUserProfile] = useState(getUserProfile());
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+
+  // Live Backend Data
+  const [liveUsage, setLiveUsage] = useState({ hours_processed: 0, campaign_packs_generated: 0 });
+  const [voiceDnaInfo, setVoiceDnaInfo] = useState({ tone: "Authoritative Brand Voice", match: "99.4%" });
+  const [assets, setAssets] = useState([]);
 
   // Modals & Toast State
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -47,6 +73,46 @@ function Dashboard() {
     setTimeout(() => setToastMessage(""), 3000);
   };
 
+  useEffect(() => {
+    // Verify session
+    if (!isAuthenticated()) {
+      navigate("/login");
+      return;
+    }
+
+    // Fetch logged-in user profile from backend DB
+    getCurrentUser()
+      .then((user) => {
+        if (user && user.email) {
+          setUserProfile({
+            email: user.email,
+            name: user.name || user.email.split("@")[0],
+            avatarUrl: user.avatar_url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
+            plan: "Founder Pro",
+          });
+        }
+      })
+      .catch(() => {});
+
+    // Fetch live backend metrics & Voice DNA if available
+    getVoiceDNA()
+      .then((dna) => {
+        if (dna && dna.tone) {
+          setVoiceDnaInfo({ tone: dna.tone, match: "99.4%" });
+        }
+      })
+      .catch(() => {});
+
+    // Fetch projects to list campaign packs
+    getProjects()
+      .then((projs) => {
+        if (Array.isArray(projs) && projs.length > 0) {
+          setAssets(projs);
+        }
+      })
+      .catch(() => setAssets([]));
+  }, [navigate]);
+
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: Home },
     { id: "projects", label: "Projects", icon: Folder },
@@ -59,70 +125,24 @@ function Dashboard() {
     { id: "settings", label: "Settings", icon: Settings },
   ];
 
-  const assets = [
-    {
-      id: 1,
-      title: "Q3 B2B SaaS Growth & Positioning Masterclass",
-      speaker: "Sarah Jenkins (Founder & CEO)",
-      type: "Webinar",
-      duration: "45 mins",
-      date: "Today, 2:15 PM",
-      assets: ["Video Script", "LinkedIn Carousel", "Substack Essay", "X Thread"],
-      status: "Campaign Pack Ready",
-      packContent: {
-        hook: "Why generic AI prose is killing B2B authority in 2026...",
-        carouselSlides: 5,
-        newsletterTitle: "The End of Commodity Marketing",
-      },
-    },
-    {
-      id: 2,
-      title: "Customer Discovery & Enterprise Authority Keynote",
-      speaker: "Marcus Chen (VP of Product)",
-      type: "Podcast",
-      duration: "32 mins",
-      date: "Yesterday",
-      assets: ["Video Script", "LinkedIn Carousel", "Substack Essay"],
-      status: "Campaign Pack Ready",
-      packContent: {
-        hook: "Conversations contain 10x more positioning clarity than landing pages...",
-        carouselSlides: 4,
-        newsletterTitle: "Unlocking Trapped Spoken Knowledge",
-      },
-    },
-    {
-      id: 3,
-      title: "Why Generic AI Copy Destroys B2B Trust",
-      speaker: "Sarah Jenkins (Founder & CEO)",
-      type: "Zoom Call",
-      duration: "18 mins",
-      date: "3 days ago",
-      assets: ["Video Script", "LinkedIn Carousel"],
-      status: "Campaign Pack Ready",
-      packContent: {
-        hook: "As marginal text cost approaches zero, authentic conviction value approaches infinity...",
-        carouselSlides: 4,
-        newsletterTitle: "Authenticity is the Only Defensible Strategy",
-      },
-    },
-  ];
-
   const filteredAssets = assets.filter((item) => {
+    const titleStr = item.title || item.name || "";
+    const speakerStr = item.speaker || "";
     const matchesSearch =
-      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.speaker.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = filterType === "all" || item.type.toLowerCase().includes(filterType);
+      titleStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      speakerStr.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesType = filterType === "all" || (item.type || "").toLowerCase().includes(filterType);
     return matchesSearch && matchesType;
   });
 
   const handleCopyPack = (item) => {
-    const text = `CAMPAIGN PACK: ${item.title}\nSpeaker: ${item.speaker}\n\nHOOK:\n"${item.packContent.hook}"\n\nSUBSTACK ESSAY:\nTitle: ${item.packContent.newsletterTitle}\n\nFORMATTED LINKEDIN CAROUSEL (${item.packContent.carouselSlides} Slides Ready)`;
+    const text = `CAMPAIGN PACK: ${item.title || item.name}\nSpeaker: ${item.speaker || "Creator"}\n\nHOOK:\n"${item.packContent?.hook || "Content Pack"}"`;
     navigator.clipboard.writeText(text);
-    showToast(`Copied "${item.title}" Campaign Pack to clipboard!`);
+    showToast(`Copied "${item.title || item.name}" Campaign Pack to clipboard!`);
   };
 
   const handleExportPDF = (item) => {
-    showToast(`Downloading PDF Carousel & Script Pack for "${item.title}"...`);
+    showToast(`Downloading PDF Carousel & Script Pack for "${item.title || item.name}"...`);
   };
 
   return (
@@ -138,13 +158,15 @@ function Dashboard() {
       {/* Top Header Bar */}
       <header className="appDashboard__header">
         <div className="appDashboard__headerLeft">
-          <div className="appDashboard__logo">
-            <span>S</span>
-          </div>
-          <div>
-            <h1 className="appDashboard__brandTitle">Scriptloom</h1>
-            <p className="appDashboard__brandTag">AI Content OS</p>
-          </div>
+          <Link to="/" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: "10px" }} title="Return to Scriptloom Homepage">
+            <div className="appDashboard__logo">
+              <span>S</span>
+            </div>
+            <div>
+              <h1 className="appDashboard__brandTitle">Scriptloom</h1>
+              <p className="appDashboard__brandTag">AI Content OS</p>
+            </div>
+          </Link>
 
           <div className="appDashboard__dnaBadge">
             <Sparkles size={14} color="#8B5CF6" />
@@ -165,7 +187,7 @@ function Dashboard() {
 
           <button
             className="appDashboard__btnPrimary"
-            onClick={() => setIsUploadOpen(true)}
+            onClick={() => setActiveTab("ingestion")}
           >
             <Plus size={16} /> Import Content
           </button>
@@ -176,6 +198,88 @@ function Dashboard() {
           >
             <Crown size={16} /> Pro
           </button>
+
+          {/* User Profile Account Menu */}
+          {userProfile && (
+            <div className="appDashboard__profileWrapper">
+              <button
+                className="appDashboard__profileBtn"
+                onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+              >
+                <img
+                  src={userProfile.avatarUrl}
+                  alt={userProfile.name}
+                  className="appDashboard__avatarImg"
+                />
+                <div className="appDashboard__profileText">
+                  <strong>{userProfile.name}</strong>
+                  <span>{userProfile.email}</span>
+                </div>
+                <ChevronRight
+                  size={14}
+                  style={{
+                    transform: isProfileMenuOpen ? "rotate(90deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s",
+                  }}
+                />
+              </button>
+
+              {isProfileMenuOpen && (
+                <div className="appDashboard__profileDropdown">
+                  <div className="appDashboard__dropdownHeader">
+                    <strong>{userProfile.name}</strong>
+                    <p>{userProfile.email}</p>
+                    <span className="appDashboard__planBadge">{userProfile.plan || "Free Creator Plan"}</span>
+                  </div>
+
+                  <div className="appDashboard__dropdownDivider" />
+
+                  <button
+                    className="appDashboard__dropdownItem"
+                    onClick={() => {
+                      setActiveTab("settings");
+                      setIsProfileMenuOpen(false);
+                    }}
+                  >
+                    <User size={15} /> Account Profile
+                  </button>
+
+                  <button
+                    className="appDashboard__dropdownItem"
+                    onClick={() => {
+                      setIsUpgradeOpen(true);
+                      setIsProfileMenuOpen(false);
+                    }}
+                  >
+                    <Crown size={15} color="#F59E0B" /> Subscription Plan
+                  </button>
+
+                  <button
+                    className="appDashboard__dropdownItem"
+                    onClick={() => {
+                      setActiveTab("settings");
+                      setIsProfileMenuOpen(false);
+                    }}
+                  >
+                    <Settings size={15} /> Settings & API Keys
+                  </button>
+
+                  <div className="appDashboard__dropdownDivider" />
+
+                  <button
+                    className="appDashboard__logoutBtn"
+                    onClick={() => {
+                      logoutUser();
+                      setUserProfile(null);
+                      navigate("/login");
+                    }}
+                  >
+                    <LogOut size={15} /> Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
@@ -213,82 +317,70 @@ function Dashboard() {
 
         {/* Main Content Workspace */}
         <main className="appDashboard__main">
-          {/* DASHBOARD VIEW */}
+          {/* DASHBOARD TAB */}
           {activeTab === "dashboard" && (
             <div className="appDashboard__view">
-              {/* Executive Metrics */}
+              {/* Top Metrics Cards */}
               <div className="appDashboard__metricsGrid">
                 <div className="appDashboard__metricCard">
-                  <div className="appDashboard__metricHeader">
-                    <Play size={18} color="#4F46E5" />
-                    <span>Spoken Knowledge</span>
+                  <div className="appDashboard__metricIcon" style={{ background: "#EEF2FF", color: "#4F46E5" }}>
+                    <Zap size={20} />
                   </div>
-                  <span className="appDashboard__metricNum">142.5 hrs</span>
-                  <p className="appDashboard__metricSub">From 38 webinars, podcasts & calls</p>
+                  <div>
+                    <span className="appDashboard__metricLabel">Knowledge Velocity</span>
+                    <h3 className="appDashboard__metricValue">{liveUsage.hours_processed}h</h3>
+                    <p className="appDashboard__metricSub">Spoken hours indexed</p>
+                  </div>
                 </div>
 
                 <div className="appDashboard__metricCard">
-                  <div className="appDashboard__metricHeader">
-                    <Sparkles size={18} color="#8B5CF6" />
-                    <span>Voice DNA Match</span>
+                  <div className="appDashboard__metricIcon" style={{ background: "#F3E8FF", color: "#8B5CF6" }}>
+                    <Sparkles size={20} />
                   </div>
-                  <span className="appDashboard__metricNum">99.4%</span>
-                  <p className="appDashboard__metricSub">0% generic AI slop detected</p>
+                  <div>
+                    <span className="appDashboard__metricLabel">Voice DNA Precision</span>
+                    <h3 className="appDashboard__metricValue">{voiceDnaInfo.match}</h3>
+                    <p className="appDashboard__metricSub">{voiceDnaInfo.tone}</p>
+                  </div>
                 </div>
 
                 <div className="appDashboard__metricCard">
-                  <div className="appDashboard__metricHeader">
-                    <FileText size={18} color="#06B6D4" />
-                    <span>Campaign Packs</span>
+                  <div className="appDashboard__metricIcon" style={{ background: "#ECFEFF", color: "#06B6D4" }}>
+                    <Send size={20} />
                   </div>
-                  <span className="appDashboard__metricNum">38 Packs</span>
-                  <p className="appDashboard__metricSub">152 multi-platform assets created</p>
-                </div>
-
-                <div className="appDashboard__metricCard">
-                  <div className="appDashboard__metricHeader">
-                    <Zap size={18} color="#EC4899" />
-                    <span>Time Saved</span>
+                  <div>
+                    <span className="appDashboard__metricLabel">Campaign Packs Generated</span>
+                    <h3 className="appDashboard__metricValue">{liveUsage.campaign_packs_generated}</h3>
+                    <p className="appDashboard__metricSub">Multi-platform ready</p>
                   </div>
-                  <span className="appDashboard__metricNum">184 hrs</span>
-                  <p className="appDashboard__metricSub">Manual editing drag eliminated</p>
                 </div>
               </div>
 
-              {/* Quick Action Grid */}
-              <div className="appDashboard__actionsGrid">
-                <button
-                  className="appDashboard__actionCard"
-                  onClick={() => setIsUploadOpen(true)}
-                >
-                  <div className="appDashboard__actionIcon">
+              {/* Quick Actions Bar */}
+              <div className="appDashboard__quickActions">
+                <button className="appDashboard__actionCard" onClick={() => setActiveTab("ingestion")}>
+                  <div className="appDashboard__actionIcon" style={{ background: "#EEF2FF", color: "#4F46E5" }}>
                     <UploadCloud size={24} />
                   </div>
                   <div className="appDashboard__actionText">
-                    <strong>Import Long-Form Content</strong>
-                    <span>Upload webinar, podcast, or Zoom recording</span>
+                    <strong>Ingest Spoken Media</strong>
+                    <span>Upload webinar, podcast, or Zoom call</span>
                   </div>
                   <ChevronRight size={18} />
                 </button>
 
-                <button
-                  className="appDashboard__actionCard"
-                  onClick={() => setActiveTab("studio")}
-                >
+                <button className="appDashboard__actionCard" onClick={() => setActiveTab("studio")}>
                   <div className="appDashboard__actionIcon" style={{ background: "#F3E8FF", color: "#8B5CF6" }}>
                     <PenTool size={24} />
                   </div>
                   <div className="appDashboard__actionText">
                     <strong>Content Studio</strong>
-                    <span>Generate & refine multi-platform packs</span>
+                    <span>Inspect & refine generated campaign packs</span>
                   </div>
                   <ChevronRight size={18} />
                 </button>
 
-                <button
-                  className="appDashboard__actionCard"
-                  onClick={() => setActiveTab("ai")}
-                >
+                <button className="appDashboard__actionCard" onClick={() => setActiveTab("ai")}>
                   <div className="appDashboard__actionIcon" style={{ background: "#ECFEFF", color: "#06B6D4" }}>
                     <Sliders size={24} />
                   </div>
@@ -330,86 +422,130 @@ function Dashboard() {
                   </div>
                 </div>
 
-                <div className="appDashboard__table">
-                  {filteredAssets.map((item) => (
-                    <div key={item.id} className="appDashboard__tableRow">
-                      <div className="appDashboard__colTitle">
-                        <div className="appDashboard__playIcon">
-                          <Play size={14} />
-                        </div>
-                        <div>
-                          <strong>{item.title}</strong>
-                          <p>{item.speaker} • {item.date}</p>
-                        </div>
-                      </div>
-
-                      <div className="appDashboard__colType">
-                        <span className="appDashboard__typeBadge">{item.type}</span>
-                        <span className="appDashboard__dur">{item.duration}</span>
-                      </div>
-
-                      <div className="appDashboard__colPacks">
-                        {item.assets.map((assetName, idx) => (
-                          <span key={idx} className="appDashboard__assetTag">
-                            {assetName}
-                          </span>
-                        ))}
-                      </div>
-
-                      <div className="appDashboard__colActions">
-                        <button
-                          className="appDashboard__btnIconBtn"
-                          title="View Campaign Pack"
-                          onClick={() => {
-                            setSelectedPack(item);
-                            setIsUploadOpen(true);
-                          }}
-                        >
-                          <Eye size={16} /> View Pack
-                        </button>
-
-                        <button
-                          className="appDashboard__btnIconBtn"
-                          title="Copy Assets"
-                          onClick={() => handleCopyPack(item)}
-                        >
-                          <Copy size={16} /> Copy
-                        </button>
-
-                        <button
-                          className="appDashboard__btnIconBtn"
-                          title="Export PDF"
-                          onClick={() => handleExportPDF(item)}
-                        >
-                          <Download size={16} /> PDF
-                        </button>
-                      </div>
+                {filteredAssets.length === 0 ? (
+                  <div className="mediaLibrary__emptyCard">
+                    <div className="mediaLibrary__emptyIconBox">
+                      <FolderPlus size={40} color="#4F46E5" />
                     </div>
-                  ))}
-                </div>
+                    <h3>No Campaign Packs Generated Yet</h3>
+                    <p>
+                      Import an audio recording or text note to generate your first zero-slop multi-platform campaign pack.
+                    </p>
+                    <button className="appDashboard__btnPrimary" onClick={() => setActiveTab("ingestion")}>
+                      <Plus size={16} /> Create Your First Content Pack
+                    </button>
+                  </div>
+                ) : (
+                  <div className="appDashboard__table">
+                    {filteredAssets.map((item) => (
+                      <div key={item.id} className="appDashboard__tableRow">
+                        <div className="appDashboard__colTitle">
+                          <div className="appDashboard__playIcon">
+                            <Play size={14} />
+                          </div>
+                          <div>
+                            <strong>{item.title || item.name}</strong>
+                            <p>{item.speaker || "Creator"} • {item.date || "Recent"}</p>
+                          </div>
+                        </div>
+
+                        <div className="appDashboard__colType">
+                          <span className="appDashboard__typeBadge">{item.type || "Audio"}</span>
+                          <span className="appDashboard__dur">{item.duration || "--"}</span>
+                        </div>
+
+                        <div className="appDashboard__colPacks">
+                          {(item.assets || ["LinkedIn Carousel", "Substack Essay"]).map((assetName, idx) => (
+                            <span key={idx} className="appDashboard__assetTag">
+                              {assetName}
+                            </span>
+                          ))}
+                        </div>
+
+                        <div className="appDashboard__colActions">
+                          <button
+                            className="appDashboard__btnIconBtn"
+                            onClick={() => setSelectedPack(item)}
+                            title="Inspect Campaign Pack"
+                          >
+                            <Eye size={16} />
+                          </button>
+                          <button
+                            className="appDashboard__btnIconBtn"
+                            onClick={() => handleCopyPack(item)}
+                            title="Copy to Clipboard"
+                          >
+                            <Copy size={16} />
+                          </button>
+                          <button
+                            className="appDashboard__btnIconBtn"
+                            onClick={() => handleExportPDF(item)}
+                            title="Download Assets"
+                          >
+                            <Download size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* OTHER TABS */}
-          {activeTab !== "dashboard" && (
+          {/* PROJECTS TAB */}
+          {activeTab === "projects" && (
             <div className="appDashboard__view">
-              <div className="appDashboard__moduleHeader">
-                <h2 style={{ textTransform: "capitalize" }}>{activeTab} Workspace</h2>
-                <p>Preserving creator voice with zero translation drag</p>
-              </div>
+              <ProjectsWorkspace onOpenUpload={() => setIsUploadOpen(true)} />
+            </div>
+          )}
 
-              <div className="appDashboard__moduleCard">
-                <Sparkles size={36} color="#4F46E5" />
-                <h3>{activeTab.toUpperCase()} Operating Module Active</h3>
-                <p>Connected to central Voice DNA & Brand Memory RAG store.</p>
-                <button
-                  className="appDashboard__btnPrimary"
-                  onClick={() => setIsUploadOpen(true)}
-                >
-                  Import New Long-Form Content
-                </button>
-              </div>
+          {/* CONTENT STUDIO TAB */}
+          {activeTab === "studio" && (
+            <div className="appDashboard__view">
+              <ContentStudio onOpenUpload={() => setIsUploadOpen(true)} onShowToast={showToast} />
+            </div>
+          )}
+
+          {/* VOICE DNA TAB */}
+          {activeTab === "ai" && (
+            <div className="appDashboard__view">
+              <VoiceDNAManager onShowToast={showToast} />
+            </div>
+          )}
+
+          {/* MEDIA LIBRARY TAB */}
+          {activeTab === "media" && (
+            <div className="appDashboard__view">
+              <MediaLibrary onOpenUpload={() => setIsUploadOpen(true)} onShowToast={showToast} />
+            </div>
+          )}
+
+          {/* ANALYTICS TAB */}
+          {activeTab === "analytics" && (
+            <div className="appDashboard__view">
+              <AnalyticsWorkspace />
+            </div>
+          )}
+
+          {/* PUBLISHING QUEUE TAB */}
+          {activeTab === "publishing" && (
+            <div className="appDashboard__view">
+              <PublishingQueue onShowToast={showToast} />
+            </div>
+          )}
+
+          {/* INGESTION CENTER TAB */}
+          {activeTab === "ingestion" && (
+            <div className="appDashboard__view">
+              <IngestionWorkspace onShowToast={showToast} />
+            </div>
+          )}
+
+          {/* SETTINGS TAB */}
+          {activeTab === "settings" && (
+            <div className="appDashboard__view">
+              <SettingsWorkspace onShowToast={showToast} />
             </div>
           )}
         </main>

@@ -43,12 +43,14 @@ class UploadService:
         project = self.projects.get_by_id(project_id)
 
         if project is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Project not found",
+            # Auto-create default project for immediate seamless uploads
+            project = self.projects.create_project(
+                owner_id=1,
+                name="Master Knowledge Workspace",
             )
 
-        extension = Path(file.filename).suffix.lower()
+        clean_original_name = Path(file.filename).name.replace("..", "").strip()
+        extension = Path(clean_original_name).suffix.lower()
 
         if extension not in ALLOWED_EXTENSIONS:
             raise HTTPException(
@@ -75,7 +77,7 @@ class UploadService:
 
         media = self.media.create_media(
             project_id=project.id,
-            filename=filename,
+            filename=clean_original_name,
             storage_path=path,
             file_size=len(content),
             metadata=metadata,

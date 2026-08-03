@@ -6,3 +6,8 @@ from backend.models.clip import Clip
 from backend.models.transcript import Transcript, TranscriptSegment
 from backend.models.voice_dna import VoiceDNA
 from backend.models.creator_memory import CreatorMemory
+from backend.models.generated_content import GeneratedContent
+from backend.models.billing import UserSubscription, UsageRecord
+from backend.models.audit_log import AuditLog
+from backend.models.progress_event import ProgressEvent
+from backend.models.webhook import WebhookEndpoint, WebhookDeliveryLog, DeadLetterQueue

@@ -65,6 +65,28 @@ class AuthService:
 
         return user, token
 
+    def google_login(
+        self,
+        email: str,
+        name: str = "Google User",
+        avatar_url: str = None,
+    ) -> tuple:
+        user = self.users.get_by_email(email)
+
+        if user is None:
+            # Create user in DB
+            user = self.users.create_user(
+                name=name,
+                email=email,
+                hashed_password=hash_password("oauth_google_protected_pass"),
+            )
+            if avatar_url and hasattr(user, "avatar_url"):
+                user.avatar_url = avatar_url
+                self.users.db.commit()
+
+        token = create_access_token({"sub": str(user.id)})
+        return user, token
+
     def get_user_by_email(
         self,
         email: str,

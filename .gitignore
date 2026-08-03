@@ -2,22 +2,40 @@
 __pycache__/
 *.pyc
 
+# Secrets / environment
 .env
+.env.*
+!.env.example
 
+# Local databases
 scriptloom.db
+*.sqlite
+*.sqlite3
 
-.alembic
-
-.vscode/
-
-.idea/
-
+# Python
 .pytest_cache/
-
 .coverage
-
 htmlcov/
 
-dist/
+# IDE
+.vscode/
+.idea/
 
+# Frontend
+node_modules/
+frontend/node_modules/
+dist/
 build/
+
+# Runtime media / generated files
+media/uploads/*
+media/output/*
+uploads/*
+storage/*
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

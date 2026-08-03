@@ -93,3 +93,31 @@ def forgot_password(
     return {
         "message": "If the email is registered, a password reset link has been sent."
     }
+
+
+from pydantic import BaseModel
+
+class GoogleAuthSchema(BaseModel):
+    email: str
+    name: str = "Google User"
+    avatar_url: str | None = None
+
+
+@router.post(
+    "/google",
+    response_model=TokenResponse,
+)
+def google_auth(
+    payload: GoogleAuthSchema,
+    db: Session = Depends(get_db),
+):
+    user, token = AuthService(db).google_login(
+        email=payload.email,
+        name=payload.name,
+        avatar_url=payload.avatar_url,
+    )
+    return TokenResponse(
+        access_token=token,
+        token_type="bearer",
+        user=UserResponse.model_validate(user),
+    )

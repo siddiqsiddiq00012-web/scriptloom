@@ -24,10 +24,11 @@ def create_access_token(
 
     to_encode.update({"exp": expire})
 
+    alg = getattr(settings, "JWT_ALGORITHM", getattr(settings, "ALGORITHM", "HS256"))
     return jwt.encode(
         to_encode,
         settings.SECRET_KEY,
-        algorithm=settings.JWT_ALGORITHM,
+        algorithm=alg,
     )
 
 
@@ -35,10 +36,11 @@ def verify_access_token(
     token: str,
 ) -> dict | None:
     try:
+        alg = getattr(settings, "JWT_ALGORITHM", getattr(settings, "ALGORITHM", "HS256"))
         return jwt.decode(
             token,
             settings.SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM],
+            algorithms=[alg],
         )
 
     except JWTError:

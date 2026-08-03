@@ -1,0 +1,179 @@
+.voiceDnaManager {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.voiceDnaManager__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.voiceDnaManager__header h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0F172A;
+}
+
+.voiceDnaManager__header p {
+  font-size: 14px;
+  color: #64748B;
+  margin-top: 4px;
+}
+
+.voiceDnaManager__saveBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: #4F46E5;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.voiceDnaManager__saveBtn:hover {
+  background: #4338CA;
+}
+
+.voiceDnaManager__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.voiceDnaManager__card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.voiceDnaManager__cardTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.voiceDnaManager__cardTitle h3 {
+  font-size: 17px;
+  font-weight: 700;
+  color: #0F172A;
+}
+
+.voiceDnaManager__cardDesc {
+  font-size: 14px;
+  color: #64748B;
+}
+
+.voiceDnaManager__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.voiceDnaManager__field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.voiceDnaManager__field input[type="text"],
+.voiceDnaManager__field select,
+.voiceDnaManager__field textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #CBD5E1;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #0F172A;
+  outline: none;
+}
+
+.voiceDnaManager__searchBox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid #CBD5E1;
+  border-radius: 12px;
+  background: #F8FAFC;
+}
+
+.voiceDnaManager__searchBox input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 14px;
+}
+
+.voiceDnaManager__searchBox button {
+  padding: 8px 14px;
+  background: #8B5CF6;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.voiceDnaManager__memoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.voiceDnaManager__memoryItem {
+  padding: 14px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.voiceDnaManager__memoryTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.voiceDnaManager__categoryBadge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  background: #EEF2FF;
+  color: #4F46E5;
+  border-radius: 6px;
+}
+
+.voiceDnaManager__scoreBadge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #10B981;
+}
+
+.voiceDnaManager__emptyMemory {
+  text-align: center;
+  padding: 30px 10px;
+  color: #94A3B8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}

@@ -1,5 +1,5 @@
 /* ==========================================================
-   HERO LAYOUT & CONTAINER
+   HERO LAYOUT & BACKGROUND SYSTEM
 ========================================================== */
 
 .heroLayout {
@@ -7,9 +7,11 @@
   min-height: 100vh;
   background-color: #F8FAFC;
   background-image: 
-    radial-gradient(at 20% 20%, rgba(238, 242, 255, 0.8) 0px, transparent 50%),
-    radial-gradient(at 80% 30%, rgba(243, 232, 255, 0.6) 0px, transparent 50%),
-    radial-gradient(at 50% 80%, rgba(236, 254, 255, 0.7) 0px, transparent 50%);
+    radial-gradient(rgba(99, 102, 241, 0.14) 1.2px, transparent 1.2px),
+    radial-gradient(at 15% 15%, rgba(238, 242, 255, 0.9) 0px, transparent 55%),
+    radial-gradient(at 85% 25%, rgba(243, 232, 255, 0.8) 0px, transparent 55%),
+    radial-gradient(at 50% 75%, rgba(236, 254, 255, 0.8) 0px, transparent 55%);
+  background-size: 32px 32px, 100% 100%, 100% 100%, 100% 100%;
   overflow-x: hidden;
   padding-bottom: 60px;
 }
@@ -25,32 +27,59 @@
 .heroLayout__glow {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.5;
+  filter: blur(90px);
+  opacity: 0.65;
+  animation: floatGlow 12s infinite ease-in-out alternate;
 }
 
 .heroLayout__glow--purple {
-  width: 550px;
-  height: 550px;
-  background: rgba(139, 92, 246, 0.15);
-  top: -100px;
-  left: 10%;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.22) 0%, rgba(139, 92, 246, 0) 70%);
+  top: -80px;
+  left: 5%;
+  animation-delay: 0s;
 }
 
 .heroLayout__glow--blue {
-  width: 600px;
-  height: 600px;
-  background: rgba(79, 70, 229, 0.12);
-  top: 150px;
-  right: 10%;
+  width: 650px;
+  height: 650px;
+  background: radial-gradient(circle, rgba(79, 70, 229, 0.2) 0%, rgba(79, 70, 229, 0) 70%);
+  top: 120px;
+  right: 5%;
+  animation-delay: 4s;
 }
 
 .heroLayout__glow--cyan {
-  width: 450px;
-  height: 450px;
-  background: rgba(6, 182, 212, 0.12);
-  bottom: 0;
-  left: 30%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.18) 0%, rgba(6, 182, 212, 0) 70%);
+  bottom: 50px;
+  left: 35%;
+  animation-delay: 8s;
+}
+
+@keyframes floatGlow {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(25px, -30px) scale(1.08);
+  }
+  100% {
+    transform: translate(-20px, 20px) scale(0.95);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .hero {
@@ -66,6 +95,13 @@
   grid-template-columns: 1fr 340px;
   gap: 40px;
   align-items: flex-start;
+  transition: all 0.3s ease;
+}
+
+.hero__mainGrid--fullWidth {
+  grid-template-columns: 1fr;
+  max-width: 1100px;
+  margin: 0 auto;
 }
 
 /* ==========================================================
@@ -79,6 +115,7 @@
   text-align: center;
   max-width: 820px;
   margin: 0 auto;
+  animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* Top AI Badge */
