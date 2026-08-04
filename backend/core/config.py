@@ -1,3 +1,5 @@
+import sys
+from pydantic import ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,9 +11,9 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    GEMINI_API_KEY: str = ""
+    GEMINI_API_KEY: str
     REDIS_URL: str = "redis://localhost:6379/0"
-    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_ID: str
     OPENAI_API_KEY: str = ""
 
     FFMPEG_PATH: str = "ffmpeg"
@@ -45,4 +47,17 @@ class Settings(BaseSettings):
     )
 
 
-settings = Settings()
+try:
+    settings = Settings()
+except ValidationError as e:
+    missing_fields = []
+    for error in e.errors():
+        field_name = error.get("loc", [None])[0]
+        if field_name:
+            missing_fields.append(field_name)
+    
+    error_msg = (
+        f"[CONFIGURATION ERROR] Missing required environment variable(s): {', '.join(missing_fields)}\n"
+        "Please configure them in your environment or a .env file."
+    )
+    raise RuntimeError(error_msg) from e
