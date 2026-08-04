@@ -1,0 +1,39 @@
+.resource-workspace{
+    padding:32px;
+}
+
+.workspace-header{
+    margin-bottom:32px;
+}
+
+.workspace-header h1{
+    font-size:2rem;
+    margin-bottom:8px;
+}
+
+.workspace-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+    gap:24px;
+}
+
+.workspace-card{
+    background:#1f1f25;
+    border-radius:16px;
+    padding:24px;
+    border:1px solid rgba(255,255,255,.08);
+}
+
+.workspace-card h2{
+    margin-bottom:16px;
+}
+
+.workspace-card button{
+    margin-top:12px;
+    width:100%;
+}
+
+.primary-btn{
+    padding:12px;
+    font-weight:600;
+}

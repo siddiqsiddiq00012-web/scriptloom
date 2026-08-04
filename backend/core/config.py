@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     GEMINI_API_KEY: str = ""
     REDIS_URL: str = "redis://localhost:6379/0"
-
+    GOOGLE_CLIENT_ID: str = ""
     OPENAI_API_KEY: str = ""
 
     FFMPEG_PATH: str = "ffmpeg"

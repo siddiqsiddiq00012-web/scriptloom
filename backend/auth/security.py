@@ -11,9 +11,7 @@ bearer_scheme = HTTPBearer()
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Security(
-        bearer_scheme,
-    ),
+    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
     token = credentials.credentials
@@ -36,12 +34,12 @@ def get_current_user(
             detail="Invalid or expired token.",
         )
 
-    email = payload.get("sub")
+    user_id = payload.get("sub")
 
-    print("\nEMAIL:")
-    print(email)
+    print("\nUSER ID:")
+    print(user_id)
 
-    if email is None:
+    if user_id is None:
         print("\nFAILED: 'sub' claim missing.")
         print("=" * 60)
 
@@ -50,8 +48,19 @@ def get_current_user(
             detail="Invalid token payload.",
         )
 
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        print("\nFAILED: Invalid user ID in token.")
+        print("=" * 60)
+
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload.",
+        )
+
     service = UserService(db)
-    user = service.get_current_user(email)
+    user = service.get_by_id(user_id)
 
     print("\nUSER:")
     print(user)

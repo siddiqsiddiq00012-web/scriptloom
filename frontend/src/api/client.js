@@ -61,5 +61,10 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(body),
     }),
+  patch: (endpoint, body) =>
+    apiRequest(endpoint, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
   delete: (endpoint) => apiRequest(endpoint, { method: "DELETE" }),
 };

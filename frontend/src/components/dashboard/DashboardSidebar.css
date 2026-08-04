@@ -1,0 +1,51 @@
+.dashboardSidebar{
+    width:260px;
+    background:#111827;
+    color:white;
+    display:flex;
+    flex-direction:column;
+    padding:24px;
+}
+
+.dashboardSidebar__logo{
+    margin-bottom:40px;
+}
+
+.dashboardSidebar__logo h2{
+    margin:0;
+    font-size:24px;
+}
+
+.dashboardSidebar__logo span{
+    color:#9ca3af;
+    font-size:14px;
+}
+
+.dashboardSidebar__nav{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+}
+
+.dashboardSidebar__item{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    border:none;
+    background:transparent;
+    color:#d1d5db;
+    padding:14px;
+    border-radius:10px;
+    cursor:pointer;
+    font-size:15px;
+    transition:0.2s;
+}
+
+.dashboardSidebar__item:hover{
+    background:#1f2937;
+}
+
+.dashboardSidebar__item--active{
+    background:#4f46e5;
+    color:white;
+}
