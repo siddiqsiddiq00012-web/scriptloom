@@ -1,17 +1,21 @@
 import { api } from "./client";
 
 export async function getProjects() {
-  try {
-    return await api.get("/projects/");
-  } catch (err) {
-    return [];
-  }
+  return await api.get("/projects");
+}
+
+export async function getProject(projectId) {
+  return await api.get(`/projects/${projectId}`);
 }
 
 export async function createProject(data) {
-  try {
-    return await api.post("/projects/", data);
-  } catch (err) {
-    return { id: Date.now(), name: data.name, description: data.description };
-  }
+  return await api.post("/projects", data);
+}
+
+export async function updateProject(projectId, data) {
+  return await api.patch(`/projects/${projectId}`, data);
+}
+
+export async function deleteProject(projectId) {
+  return await api.delete(`/projects/${projectId}`);
 }
