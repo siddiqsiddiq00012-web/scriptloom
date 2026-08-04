@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
 from backend.auth.security import get_current_user
@@ -7,6 +7,7 @@ from backend.models.user import User
 from backend.schemas.project import (
     ProjectCreate,
     ProjectResponse,
+    ProjectUpdate,
 )
 from backend.services.project_service import ProjectService
 
@@ -43,3 +44,51 @@ def list_projects(
     return ProjectService(db).list_projects(
         current_user=current_user,
     )
+
+
+@router.get(
+    "/{project_id}",
+    response_model=ProjectResponse,
+)
+def get_project(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return ProjectService(db).get_project(
+        current_user=current_user,
+        project_id=project_id,
+    )
+
+
+@router.patch(
+    "/{project_id}",
+    response_model=ProjectResponse,
+)
+def update_project(
+    project_id: int,
+    project: ProjectUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return ProjectService(db).update_project(
+        current_user=current_user,
+        project_id=project_id,
+        project_data=project,
+    )
+
+
+@router.delete(
+    "/{project_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_project(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    ProjectService(db).delete_project(
+        current_user=current_user,
+        project_id=project_id,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
