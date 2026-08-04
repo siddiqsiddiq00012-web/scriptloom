@@ -40,3 +40,16 @@ class ProfileUpdate(BaseModel):
 
 class PasswordResetRequest(BaseModel):
     email: EmailStr
+
+
+class GoogleAuthRequest(BaseModel):
+    id_token: str | None = Field(None, description="Google OAuth ID Token")
+    token: str | None = Field(None, description="Alternative field for Google OAuth ID Token")
+    credential: str | None = Field(None, description="Google GIS credential response field")
+
+    @property
+    def get_token(self) -> str:
+        tok = self.id_token or self.token or self.credential
+        if not tok:
+            raise ValueError("Google ID Token is required.")
+        return tok
