@@ -1,5 +1,6 @@
 import sys
-from pydantic import ValidationError
+from typing import Any
+from pydantic import ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +16,23 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     GOOGLE_CLIENT_ID: str
     OPENAI_API_KEY: str = ""
+    ALLOWED_ORIGINS: Any
+
+    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def parse_allowed_origins(cls, v: Any) -> list[str]:
+        if isinstance(v, str):
+            try:
+                import json
+                decoded = json.loads(v)
+                if isinstance(decoded, list):
+                    return [str(item).strip() for item in decoded]
+            except json.JSONDecodeError:
+                pass
+            return [item.strip() for item in v.split(",") if item.strip()]
+        if isinstance(v, list):
+            return [str(item).strip() for item in v]
+        raise ValueError("Invalid format for ALLOWED_ORIGINS")
 
     FFMPEG_PATH: str = "ffmpeg"
     FFPROBE_PATH: str = "ffprobe"

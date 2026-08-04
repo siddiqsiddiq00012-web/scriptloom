@@ -11,6 +11,10 @@ os.environ.setdefault(
     "GOOGLE_CLIENT_ID",
     "895652265626-9u3ala8rn0hpdtrjgbdeh116ukvi8cv5.apps.googleusercontent.com"
 )
+os.environ.setdefault(
+    "ALLOWED_ORIGINS",
+    "http://localhost:5173,http://localhost:5174,http://example.com"
+)
 
 # Ensure all SQLite tables are created for direct session queries prior to running tests
 from backend.db.database import engine
