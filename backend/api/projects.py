@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
-from backend.auth.security import get_current_user
+from backend.core.dependencies import get_current_user
 from backend.db.dependencies import get_db
 from backend.models.user import User
 from backend.schemas.project import (
