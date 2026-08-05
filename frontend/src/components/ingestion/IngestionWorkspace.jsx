@@ -15,6 +15,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { uploadMediaFile, transcribeMedia } from "../../api/media";
+import { getProjects } from "../../api/projects";
 import { progressStream } from "../../services/progressStream";
 
 function IngestionWorkspace({ onShowToast }) {
@@ -52,8 +53,18 @@ function IngestionWorkspace({ onShowToast }) {
     setStatusMessage("Sanitizing file header & magic bytes...");
 
     try {
+      // Fetch user's first project
+      const projects = await getProjects();
+      if (!Array.isArray(projects) || projects.length === 0) {
+        if (onShowToast) onShowToast("Please create a project first before processing media.");
+        setIsProcessing(false);
+        setProgress(0);
+        return;
+      }
+      const targetProjectId = projects[0].id;
+
       // Step 1: Upload file to backend
-      const media = await uploadMediaFile(1, selectedFile);
+      const media = await uploadMediaFile(targetProjectId, selectedFile);
       setProgress(45);
       setStatusMessage("Extracting 16kHz WAV audio & peak waveforms...");
 

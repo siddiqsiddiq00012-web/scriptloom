@@ -1,5 +1,4 @@
 import json
-import math
 import os
 import struct
 from pathlib import Path
@@ -53,15 +52,14 @@ class WaveformProcessor:
                         # Normalize between 0.05 and 1.0
                         norm_peak = round(min(1.0, max(0.05, max_val / 32768.0)), 3)
                         peaks.append(norm_peak)
-        except Exception:
-            pass
+        except Exception as e:
+            raise RuntimeError(
+                f"Waveform generation failed for '{audio_str}': {e}"
+            ) from e
 
-        # Fallback wave peaks if file reading failed or was empty
+        # If we didn't get enough peaks (e.g. very short audio), pad with low values
         if len(peaks) < num_peaks:
-            peaks = [
-                round(min(1.0, max(0.1, 0.4 + 0.3 * math.sin(i * 0.2))), 3)
-                for i in range(num_peaks)
-            ]
+            peaks.extend([0.1] * (num_peaks - len(peaks)))
 
         with open(output_str, "w") as f:
             json.dump(peaks, f)

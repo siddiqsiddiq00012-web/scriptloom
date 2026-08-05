@@ -1,5 +1,4 @@
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -32,23 +31,21 @@ class AudioProcessor:
             output_str,
         ]
 
-        try:
-            subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            return output_str
-        except Exception as e:
-            # Fallback if FFmpeg isn't installed in the system PATH:
-            # If the file is already a WAV or readable audio, copy or create dummy fallback WAV
-            if input_str.endswith(".wav"):
-                shutil.copy2(input_str, output_str)
-                return output_str
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+        )
 
-            # Create a silent 1-second fallback WAV header to prevent pipeline breakage
-            with open(output_str, "wb") as f:
-                # Basic 44-byte WAV header for 16kHz mono 16-bit
-                f.write(b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80\x3e\x00\x00\x00\x7d\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00")
-            return output_str
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"FFmpeg audio extraction failed (exit code {result.returncode}): "
+                f"{result.stderr.strip() or 'No stderr output'}"
+            )
+
+        if not os.path.exists(output_str) or os.path.getsize(output_str) == 0:
+            raise RuntimeError(
+                "FFmpeg produced no output file or an empty WAV file."
+            )
+
+        return output_str

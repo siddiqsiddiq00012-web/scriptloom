@@ -62,45 +62,27 @@ class STTEngine:
         if not raw_segments:
             raise STTTranscriptionError("No speech detected or transcription is empty.")
 
-        # Perform Diarization & Topic Segmentation
+        # Build honest transcript segments.
+        # Speaker diarization, chapter detection, and key-assertion extraction are
+        # NOT implemented, so we do not fabricate them. Segments carry a neutral
+        # speaker label (editable via the transcript API) and no invented structure.
         enriched_segments = []
         full_text_parts = []
 
-        chapters = [
-            "Chapter 1: The Traditional Translation Tax",
-            "Chapter 2: Why Generic AI Slop Destroys Authority",
-            "Chapter 3: Voice DNA & Operational Reasoning",
-            "Chapter 4: The Zero-Edit Campaign Model",
-        ]
-
-        key_assertions = [
-            "Executive spoken dialogue contains 10x more positioning clarity than written docs.",
-            "Generic AI wrappers dilute brand authority into low-context robotic copy.",
-            "Voice DNA matches exact speech cadence, vocabulary preferences, and banned jargon.",
-            "Authenticity is the only defensible commercial strategy in the AI era.",
-        ]
-
-        for idx, seg in enumerate(raw_segments):
-            speaker = "Speaker 1 (Founder)" if idx % 2 == 0 else "Speaker 2 (Host)"
-            chapter = chapters[idx % len(chapters)]
-            assertion = key_assertions[idx % len(key_assertions)]
-
-            full_text_parts.append(f"[{speaker}] {seg['text']}")
+        for seg in raw_segments:
+            full_text_parts.append(seg["text"])
 
             enriched_segments.append({
-                "speaker_label": speaker,
+                "speaker_label": "Speaker",
                 "start_time": seg["start"],
                 "end_time": seg["end"],
                 "text": seg["text"],
-                "chapter_title": chapter,
-                "key_assertion": assertion,
+                "chapter_title": None,
+                "key_assertion": None,
             })
 
         full_text = "\n\n".join(full_text_parts)
-        summary = (
-            "Executive masterclass covering spoken knowledge capture, "
-            "Voice DNA calibration, and zero-edit multi-platform campaign pack generation."
-        )
+        summary = None
 
         return {
             "language": detected_language,

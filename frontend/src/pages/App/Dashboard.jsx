@@ -47,6 +47,7 @@ import {
 import { getVoiceDNA } from "../../api/voiceDna";
 import { getCurrentUser, getUserProfile, logoutUser, isAuthenticated } from "../../api/auth";
 import { getProjects } from "../../api/projects";
+import { api } from "../../api/client";
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -60,7 +61,7 @@ function Dashboard() {
 
   // Live Backend Data
   const [liveUsage, setLiveUsage] = useState({ hours_processed: 0, campaign_packs_generated: 0 });
-  const [voiceDnaInfo, setVoiceDnaInfo] = useState({ tone: "Authoritative Brand Voice", match: "99.4%" });
+  const [voiceDnaInfo, setVoiceDnaInfo] = useState({ tone: "", match: "--" });
   const [assets, setAssets] = useState([]);
 
   // Modals & Toast State
@@ -90,7 +91,7 @@ function Dashboard() {
             email: user.email,
             name: user.name || user.email.split("@")[0],
             avatarUrl: user.avatar_url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80",
-            plan: "Founder Pro",
+            plan: "Free Creator",
           });
         }
       })
@@ -99,8 +100,27 @@ function Dashboard() {
     // Fetch live backend metrics & Voice DNA if available
     getVoiceDNA()
       .then((dna) => {
-        if (dna && dna.tone) {
-          setVoiceDnaInfo({ tone: dna.tone, match: "99.4%" });
+        if (dna) {
+          setVoiceDnaInfo({
+            tone: dna.tone || "",
+            match: dna.avg_sentence_length ? `${dna.avg_sentence_length} words/sent` : "--",
+          });
+        }
+      })
+      .catch(() => {});
+
+    // Fetch billing/usage metrics from backend
+    api.get("/billing/usage")
+      .then((usage) => {
+        if (usage) {
+          setLiveUsage({
+            hours_processed: usage.hours_processed || 0,
+            campaign_packs_generated: usage.campaign_packs_generated || 0,
+          });
+          // Update user plan from billing data
+          if (usage.plan_display_name) {
+            setUserProfile((prev) => prev ? { ...prev, plan: usage.plan_display_name } : prev);
+          }
         }
       })
       .catch(() => {});
@@ -172,7 +192,7 @@ function Dashboard() {
 
           <div className="appDashboard__dnaBadge">
             <Sparkles size={14} color="#8B5CF6" />
-            <span>Voice DNA: B2B Founder • 99.4% Match</span>
+            <span>Voice DNA{voiceDnaInfo.tone ? `: ${voiceDnaInfo.tone}` : ""}</span>
           </div>
         </div>
 
@@ -310,7 +330,7 @@ function Dashboard() {
           <div className="appDashboard__proCard">
             <div className="appDashboard__proHeader">
               <Crown size={18} color="#F59E0B" />
-              <span>Founder Pro Plan</span>
+              <span>{userProfile?.plan || "Free Creator"}</span>
             </div>
             <p>Unlimited long-form ingestion & Brand Memory RAG vectors.</p>
             <button onClick={() => setIsUpgradeOpen(true)}>Manage Plan</button>

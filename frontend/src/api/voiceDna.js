@@ -1,15 +1,15 @@
-import { apiRequest } from "./client";
+import { api } from "./client";
 
 export async function getVoiceDNA() {
-  return await apiRequest("/voice-dna/me", "GET");
+  return await api.get("/voice-dna/me");
 }
 
 export async function updateVoiceDNA(payload) {
-  return await apiRequest("/voice-dna/me", "PUT", payload);
+  return await api.put("/voice-dna/me", payload);
 }
 
 export async function searchMemory(query, category = null, topK = 5) {
-  return await apiRequest("/creator-memory/search", "POST", {
+  return await api.post("/creator-memory/search", {
     query,
     category,
     top_k: topK,

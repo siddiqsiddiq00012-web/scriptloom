@@ -1,6 +1,7 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError
 
 from backend.core.dependencies import get_current_user, verify_media_ownership
@@ -113,3 +114,30 @@ def get_job(
         "created_at": job.created_at,
         "updated_at": job.updated_at,
     }
+
+@router.get("/jobs")
+def list_user_jobs(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List all processing jobs for the current user."""
+    jobs = (
+        db.query(ProcessingJob)
+        .filter(ProcessingJob.user_id == current_user.id)
+        .order_by(desc(ProcessingJob.created_at))
+        .limit(50)
+        .all()
+    )
+    return [
+        {
+            "job_id": job.job_id,
+            "media_id": job.media_id,
+            "user_id": job.user_id,
+            "filename": job.filename,
+            "status": job.status,
+            "error_message": job.error_message,
+            "created_at": job.created_at,
+            "updated_at": job.updated_at,
+        }
+        for job in jobs
+    ]

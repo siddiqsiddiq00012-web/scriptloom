@@ -20,15 +20,18 @@ class ClipExtractionService:
         output = Path(output_video)
         output.parent.mkdir(parents=True, exist_ok=True)
 
+        # Use input-seek (-ss before -i) for speed, combined with -t (duration)
+        # after -i. Since -ss before -i resets output timestamps to 0,
+        # -t is relative to the seek point — which gives the correct clip duration.
         command = [
             settings.FFMPEG_PATH,
             "-y",
             "-ss",
             str(start),
-            "-to",
-            str(end),
             "-i",
             input_video,
+            "-t",
+            str(end - start),
         ]
 
         if subtitles:

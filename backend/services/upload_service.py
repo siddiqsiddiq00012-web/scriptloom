@@ -1,12 +1,17 @@
 import uuid
 import os
+import logging
+import tempfile
 from pathlib import Path
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
+logger = logging.getLogger("scriptloom.uploads")
+
 from backend.repositories.media_repository import MediaRepository
 from backend.repositories.project_repository import ProjectRepository
 from backend.services.ffprobe_service import FFprobeService
+from backend.services.file_sanitizer import FileSanitizer
 from backend.storage.manager import storage
 
 ALLOWED_EXTENSIONS = {
@@ -46,7 +51,8 @@ class UploadService:
                 detail="Project not found.",
             )
 
-        clean_original_name = Path(file.filename).name.replace("..", "").strip()
+        raw_filename = file.filename or "upload"
+        clean_original_name = FileSanitizer.sanitize_filename(raw_filename)
         extension = Path(clean_original_name).suffix.lower()
 
         if extension not in ALLOWED_EXTENSIONS:
@@ -55,8 +61,7 @@ class UploadService:
                 detail=f"Unsupported file type '{extension}'. Supported: {', '.join(ALLOWED_EXTENSIONS)}",
             )
 
-        temp_dir = tempfile_mdt = Path(tempfile_dir_prefix := f"upload_temp_{uuid.uuid4()}")
-        temp_dir.mkdir(exist_ok=True)
+        temp_dir = Path(tempfile.mkdtemp(prefix="upload_temp_"))
         temp_path = temp_dir / f"upload_{uuid.uuid4()}{extension}"
 
         try:
@@ -77,6 +82,11 @@ class UploadService:
                     f.write(chunk)
 
             # 2. Layered validation
+            # - Magic-byte header check (defense in depth before ffprobe)
+            with open(temp_path, "rb") as fh:
+                header_bytes = fh.read(32)
+            FileSanitizer.validate_magic_bytes(header_bytes)
+
             # - Advisory MIME verification
             declared_mime = file.content_type
             
@@ -84,9 +94,10 @@ class UploadService:
             try:
                 metadata = FFprobeService.extract_metadata(temp_path)
             except Exception as e:
+                logger.warning("Upload rejected: ffprobe validation failed for %s: %s", temp_path, e)
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Invalid media file. Format validation failed: {str(e)}",
+                    detail="Invalid media file. The file could not be read as a valid video or audio file.",
                 )
 
             # 3. Stream to persistent storage with canonical key
@@ -103,9 +114,10 @@ class UploadService:
             try:
                 storage.save_stream(storage_key, _chunk_iterator(), file_size)
             except Exception as e:
+                logger.error("Storage upload failed for key %s: %s", storage_key, e)
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Storage upload failed: {str(e)}",
+                    detail="Storage upload failed. Please try again.",
                 )
 
             # 4. Create database record with transactional cleanup rollback

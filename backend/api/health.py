@@ -4,9 +4,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from backend.db.dependencies import get_db
-from backend.services.cache_service import cache_service
-from backend.core.async_worker import async_worker_pool
-from backend.services.performance_monitor import performance_monitor
 from backend.core.config import settings
 
 router = APIRouter(
@@ -34,13 +31,17 @@ def get_readiness(db: Session = Depends(get_db)):
     try:
         db.execute(text("SELECT 1"))
         db_ok = True
-    except Exception as exc:
+    except Exception:
         db_ok = False
 
-    storage_ok = os.path.exists(settings.MEDIA_FOLDER) or os.makedirs(settings.MEDIA_FOLDER, exist_ok=True) is None
-
-    cache_stats = cache_service.get_stats()
-    performance_summary = performance_monitor.get_summary()
+    # Check the actual storage root used by the StorageProvider, not MEDIA_FOLDER
+    from backend.storage.manager import storage
+    storage_ok = False
+    if hasattr(storage, "root_directory"):
+        storage_ok = str(storage.root_directory).strip() != "" and True
+    elif hasattr(storage, "bucket_name"):
+        # R2: storage exists by config (validated at startup)
+        storage_ok = True
 
     if not db_ok:
         raise HTTPException(
@@ -50,9 +51,6 @@ def get_readiness(db: Session = Depends(get_db)):
 
     return {
         "status": "ready",
-        "database": "connected" if db_ok else "unreachable",
-        "storage": "writable" if storage_ok else "unwritable",
-        "active_worker_tasks": async_worker_pool.active_tasks,
-        "cache_stats": cache_stats,
-        "performance_metrics": performance_summary,
+        "database": "connected",
+        "storage": "configured" if storage_ok else "unconfigured",
     }

@@ -18,6 +18,7 @@ import {
   FileAudio,
 } from "lucide-react";
 import { uploadMediaFile, transcribeMedia } from "../../api/media";
+import { getProjects } from "../../api/projects";
 import { progressStream } from "../../services/progressStream";
 
 function UploadModal({ isOpen, onClose }) {
@@ -66,8 +67,19 @@ function UploadModal({ isOpen, onClose }) {
 
     try {
       if (selectedFile) {
+        setUploadProgress(30);
+
+        // Fetch user's projects to determine which project to upload to
+        const projects = await getProjects();
+        if (!Array.isArray(projects) || projects.length === 0) {
+          setErrorMessage("Please create a project first before uploading media.");
+          setStage("confirm");
+          return;
+        }
+        const targetProjectId = projects[0].id;
+
         setUploadProgress(40);
-        const media = await uploadMediaFile(1, selectedFile);
+        const media = await uploadMediaFile(targetProjectId, selectedFile);
         setUploadedMedia(media);
 
         // Connect SSE progress stream

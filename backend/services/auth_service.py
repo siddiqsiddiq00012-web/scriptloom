@@ -74,11 +74,14 @@ class AuthService:
         user = self.users.get_by_email(email)
 
         if user is None:
-            # Create user in DB
+            # Create user in DB with a random unverifiable password hash
+            # so they cannot be logged in via the password-based login flow.
+            import secrets
+            random_pass = secrets.token_urlsafe(32)
             user = self.users.create_user(
                 name=name,
                 email=email,
-                hashed_password=hash_password("oauth_google_protected_pass"),
+                hashed_password=hash_password(random_pass),
             )
             if avatar_url and hasattr(user, "avatar_url"):
                 user.avatar_url = avatar_url

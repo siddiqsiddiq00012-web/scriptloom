@@ -43,7 +43,9 @@ class GenerationEngine:
             raise ValueError(f"Media #{media_id} has no transcript. Transcribe first.")
 
         # 2. Fetch Owner's Voice DNA & Banned Words
-        owner_id = media.project.owner_id if media.project else 1
+        if not media.project or not media.project.owner_id:
+            raise ValueError(f"Media #{media_id} has no associated project/owner.")
+        owner_id = media.project.owner_id
         voice_dna = self.voice_dna_service.get_or_create_profile(owner_id)
         banned_words = [w.strip() for w in voice_dna.banned_words.split(",") if w.strip()]
 
@@ -51,11 +53,12 @@ class GenerationEngine:
         memories = self.memory_service.search_memory(owner_id, transcript.full_text[:200], top_k=3)
         memory_context_str = "\n".join([f"- {m['quote_text']}" for m in memories])
 
-        # Delete previous generated content for this media if re-generating
+        # Delete previous generated content for this media if re-generating.
+        # Not committing here — the delete and subsequent inserts happen in one transaction,
+        # committed at the end.  If anything fails, nothing is lost.
         self.db.query(GeneratedContent).filter(
             GeneratedContent.media_id == media_id
         ).delete()
-        self.db.commit()
 
         generated_items = []
 

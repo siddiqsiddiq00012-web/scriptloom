@@ -11,28 +11,67 @@ import {
   CheckCircle2,
   UploadCloud,
 } from "lucide-react";
-import { getMediaDetails, deleteMediaFile } from "../../api/media";
+import { getMediaDetails, getMediaWaveform, deleteMediaFile } from "../../api/media";
+import { getProjects } from "../../api/projects";
+import { api } from "../../api/client";
 
 function MediaLibrary({ onOpenUpload, onShowToast }) {
   const [search, setSearch] = useState("");
   const [mediaItems, setMediaItems] = useState([]);
+  const [waveformData, setWaveformData] = useState({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Fetch live media item if available
     setLoading(true);
-    getMediaDetails(1)
-      .then((data) => {
-        if (data && data.id) {
-          setMediaItems([data]);
+
+    // Fetch user's projects, then list media from the first project
+    getProjects()
+      .then(async (projects) => {
+        if (!Array.isArray(projects) || projects.length === 0) {
+          setMediaItems([]);
+          return;
+        }
+        const projectId = projects[0].id;
+
+        // Use the new backend list-media endpoint
+        const mediaList = await api.get(`/projects/${projectId}/media`);
+        if (Array.isArray(mediaList)) {
+          setMediaItems(mediaList);
+
+          // Pre-fetch waveform peaks for each media item
+          for (const item of mediaList) {
+            try {
+              const waveData = await getMediaWaveform(item.id);
+              if (waveData && Array.isArray(waveData.peaks)) {
+                // Sample to 28 peaks for visualization
+                const sampledPeaks = samplePeaks(waveData.peaks, 28);
+                setWaveformData((prev) => ({ ...prev, [item.id]: sampledPeaks }));
+              }
+            } catch {
+              // No waveform available — use placeholder
+              setWaveformData((prev) => ({
+                ...prev,
+                [item.id]: Array.from({ length: 28 }, () => 0.1),
+              }));
+            }
+          }
         }
       })
       .catch(() => {
-        // No media ingested yet
         setMediaItems([]);
       })
       .finally(() => setLoading(false));
   }, []);
+
+  // Sample a peak array down to `count` evenly-spaced values
+  const samplePeaks = (peaks, count) => {
+    if (peaks.length <= count) return peaks;
+    const step = peaks.length / count;
+    return Array.from({ length: count }, (_, i) => {
+      const idx = Math.min(Math.floor(i * step), peaks.length - 1);
+      return peaks[idx];
+    });
+  };
 
   const handleDelete = async (id, filename) => {
     try {
@@ -40,8 +79,7 @@ function MediaLibrary({ onOpenUpload, onShowToast }) {
       setMediaItems(mediaItems.filter((item) => item.id !== id));
       if (onShowToast) onShowToast(`Deleted media recording "${filename}"`);
     } catch (err) {
-      setMediaItems(mediaItems.filter((item) => item.id !== id));
-      if (onShowToast) onShowToast(`Removed recording "${filename}"`);
+      if (onShowToast) onShowToast(err.message || `Failed to delete "${filename}"`);
     }
   };
 
@@ -111,19 +149,19 @@ function MediaLibrary({ onOpenUpload, onShowToast }) {
                 <span>•</span>
                 <span>{Math.floor((item.duration || 0) / 60)} mins</span>
                 <span>•</span>
-                <span>{item.codec || "16kHz PCM"}</span>
+                <span>{item.codec || "unknown"}</span>
               </div>
 
               {/* Waveform Preview Peak Visualizer */}
               <div className="mediaLibrary__waveform">
                 <Activity size={14} color="#6366F1" />
                 <div className="mediaLibrary__peaks">
-                  {Array.from({ length: 28 }).map((_, idx) => (
+                  {(waveformData[item.id] || Array.from({ length: 28 }, () => 0.1)).map((peak, idx) => (
                     <div
                       key={idx}
                       className="peakBar"
                       style={{
-                        height: `${Math.max(15, Math.sin(idx * 0.4) * 80 + 20)}%`,
+                        height: `${Math.max(15, (peak || 0.1) * 100)}%`,
                       }}
                     />
                   ))}
@@ -133,13 +171,17 @@ function MediaLibrary({ onOpenUpload, onShowToast }) {
               <div className="mediaLibrary__cardActions">
                 <button
                   className="mediaLibrary__actionBtn"
-                  onClick={() => onShowToast(`Inspecting waveform for ${item.filename}`)}
+                  onClick={() => {
+                    if (onShowToast) onShowToast(`Waveform peaks: ${item.id}`);
+                  }}
+                  title="View waveform"
                 >
                   <Eye size={15} /> Waveform
                 </button>
                 <button
                   className="mediaLibrary__deleteBtn"
                   onClick={() => handleDelete(item.id, item.filename)}
+                  title="Delete media"
                 >
                   <Trash2 size={15} />
                 </button>
