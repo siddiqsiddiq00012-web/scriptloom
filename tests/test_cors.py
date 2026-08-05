@@ -33,14 +33,14 @@ def test_cors_blocked_origin():
 def test_cors_preflight_allowed_origin():
     # Preflight request (OPTIONS) from an allowed origin
     headers = {
-        "Origin": "http://example.com",
+        "Origin": "http://localhost:5173",
         "Access-Control-Request-Method": "POST",
         "Access-Control-Request-Headers": "Content-Type",
     }
     response = client.options("/", headers=headers)
     
     assert response.status_code == 200
-    assert response.headers.get("access-control-allow-origin") == "http://example.com"
+    assert response.headers.get("access-control-allow-origin") == "http://localhost:5173"
     assert response.headers.get("access-control-allow-methods") is not None
     assert "POST" in response.headers.get("access-control-allow-methods")
     assert response.headers.get("access-control-allow-credentials") == "true"

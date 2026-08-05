@@ -11,3 +11,4 @@ from backend.models.billing import UserSubscription, UsageRecord
 from backend.models.audit_log import AuditLog
 from backend.models.progress_event import ProgressEvent
 from backend.models.webhook import WebhookEndpoint, WebhookDeliveryLog, DeadLetterQueue
+from backend.models.processing_job import ProcessingJob

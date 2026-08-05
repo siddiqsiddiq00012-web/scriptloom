@@ -4,8 +4,8 @@ from backend.core.config import settings
 
 celery_app = Celery(
     "scriptloom",
-    broker=settings.REDIS_URL,
-    backend=settings.REDIS_URL,
+    broker=settings.CELERY_BROKER_URL or settings.REDIS_URL,
+    backend=settings.CELERY_RESULT_BACKEND or settings.REDIS_URL,
 )
 
 celery_app.conf.update(
@@ -18,3 +18,4 @@ celery_app.conf.update(
 
 # Explicitly import tasks so Celery always registers them.
 import backend.jobs.tasks.video_processing
+import backend.jobs.tasks.webhook_delivery

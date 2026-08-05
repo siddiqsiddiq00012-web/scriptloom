@@ -37,18 +37,19 @@ def transcribe_media(
     # Verify media ownership before starting transcription
     media = verify_media_ownership(media_id, current_user, db)
 
-    # Locate extracted audio WAV file
-    media_path = Path(media.storage_path)
-    audio_wav_path = media_path.parent / f"{media.id}_audio.wav"
-
-    if not audio_wav_path.exists():
-        # Fallback to source media path
-        audio_wav_path = media_path
+    # Locate and materialize the media file from storage
+    from backend.storage.manager import storage
+    if not storage.exists(media.storage_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Media file not found in storage."
+        )
 
     stt_engine = STTEngine()
     
     try:
-        stt_result = stt_engine.transcribe(audio_wav_path)
+        with storage.materialize(media.storage_path) as local_media_path:
+            stt_result = stt_engine.transcribe(local_media_path)
     except STTConfigurationError as e:
         logging.error(f"[STTEngine Config Error] {e}", exc_info=True)
         raise HTTPException(
@@ -61,6 +62,9 @@ def transcribe_media(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Failed to transcribe media: No speech detected or invalid audio."
         )
+    except HTTPException as he:
+        # Re-raise standard FastAPI HTTPExceptions
+        raise he
     except Exception as e:
         logging.error(f"[STTEngine Unexpected Error] {e}", exc_info=True)
         raise HTTPException(

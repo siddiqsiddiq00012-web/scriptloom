@@ -73,3 +73,15 @@ class Media(Base):
         back_populates="media",
         cascade="all, delete-orphan",
     )
+
+    generated_assets = relationship(
+        "GeneratedContent",
+        back_populates="media",
+        cascade="all, delete-orphan",
+    )
+
+    processing_jobs = relationship(
+        "ProcessingJob",
+        back_populates="media",
+        cascade="all, delete-orphan",
+    )

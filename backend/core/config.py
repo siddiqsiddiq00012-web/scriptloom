@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     GEMINI_API_KEY: str
     REDIS_URL: str = "redis://localhost:6379/0"
+    CELERY_BROKER_URL: str | None = None
+    CELERY_RESULT_BACKEND: str | None = None
     GOOGLE_CLIENT_ID: str
     OPENAI_API_KEY: str = ""
     ALLOWED_ORIGINS: Any
@@ -58,6 +60,12 @@ class Settings(BaseSettings):
 
     CSP_ENVIRONMENT: str = "development"  # 'development' | 'production'
     HSTS_ENABLED: bool = False
+
+    # Webhook Reliability Configuration
+    WEBHOOK_TIMEOUT: float = 5.0
+    WEBHOOK_MAX_RETRIES: int = 3
+    WEBHOOK_RETRY_DELAY: int = 60
+    WEBHOOK_RECOVERY_TIMEOUT: int = 300
 
     # Storage Backend Configuration
     STORAGE_BACKEND: str = "local"

@@ -29,9 +29,50 @@ app.add_middleware(
 )
 
 
+def recover_stale_webhook_deliveries():
+    from backend.db.database import SessionLocal
+    from backend.models.webhook import WebhookDeliveryLog
+    from datetime import datetime, timezone
+    
+    db = SessionLocal()
+    try:
+        timeout = getattr(settings, "WEBHOOK_RECOVERY_TIMEOUT", 300)
+        current_time = datetime.now(timezone.utc)
+        
+        # Select processing logs
+        processing_deliveries = (
+            db.query(WebhookDeliveryLog)
+            .filter(WebhookDeliveryLog.status == "PROCESSING")
+            .all()
+        )
+        
+        recovered_count = 0
+        for delivery in processing_deliveries:
+            if delivery.processing_started_at:
+                started_at = delivery.processing_started_at
+                if started_at.tzinfo is None:
+                    started_at = started_at.replace(tzinfo=timezone.utc)
+                elapsed = (current_time - started_at).total_seconds()
+                if elapsed > timeout:
+                    delivery.status = "PENDING"
+                    delivery.failure_reason = "Worker crash recovery reset"
+                    delivery.processing_started_at = None
+                    recovered_count += 1
+                    
+        if recovered_count > 0:
+            db.commit()
+            print(f"[RECOVERY] Successfully recovered {recovered_count} stuck webhook deliveries.")
+    except Exception as err:
+        db.rollback()
+        print(f"[RECOVERY ERROR] Failed to run webhook crash recovery on startup: {err}")
+    finally:
+        db.close()
+
+
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
+    recover_stale_webhook_deliveries()
 
 
 app.include_router(api_router, prefix="/api/v1")

@@ -15,6 +15,7 @@ from backend.api.uploads import router as uploads_router
 from backend.api.users import router as users_router
 from backend.api.voice_dna import router as voice_dna_router
 from backend.api.stream import router as stream_router
+from backend.api.webhooks import router as webhooks_router
 
 api_router = APIRouter()
 
@@ -33,3 +34,4 @@ api_router.include_router(exports_router)
 api_router.include_router(billing_router)
 api_router.include_router(processing_router)
 api_router.include_router(clips_router)
+api_router.include_router(webhooks_router)

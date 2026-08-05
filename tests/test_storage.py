@@ -323,11 +323,17 @@ def test_partial_processing_failure_removes_orphaned_clips(mock_mat, mock_exists
 
     mock_save.side_effect = save_side_effect
 
-    service = ProcessingService(SessionLocal())
-    job, video_path, output_dir = service.create_job(media_id, user_id)
-    
-    # Run background processing task (should catch exception and run compensation cleanups)
-    service.process_job(job.job_id, video_path, output_dir)
+    db_session = SessionLocal()
+    service = ProcessingService(db_session)
+    try:
+        job, video_path, _ = service.create_job(media_id, user_id)
+        # Run background processing task (should catch exception and run compensation cleanups)
+        try:
+            service.process_job(job.job_id, video_path)
+        except Exception:
+            pass
+    finally:
+        db_session.close()
 
     try:
         assert mock_delete.call_count >= 2

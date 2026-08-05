@@ -52,5 +52,5 @@ class GeneratedContent(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
-    media = relationship("Media", backref="generated_assets")
+    media = relationship("Media", back_populates="generated_assets")
     project = relationship("Project", backref="generated_assets")

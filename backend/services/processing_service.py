@@ -45,7 +45,7 @@ class ProcessingService:
                 detail="Uploaded media file not found in storage.",
             )
 
-        job = job_manager.create_job(media.filename, user_id)
+        job = job_manager.create_job(self.db, media_id, user_id)
 
         # In R2 architecture, these two string params are dummy identifiers
         # because the process_job background task dynamically materializes paths.
@@ -59,7 +59,6 @@ class ProcessingService:
         self,
         job_id: str,
         video_path: str,
-        output_directory: str,
     ) -> None:
         """
         Execute the processing pipeline.
@@ -68,6 +67,7 @@ class ProcessingService:
 
         try:
             job_manager.update_status(
+                self.db,
                 job_id,
                 JobStatus.PROCESSING,
             )
@@ -150,6 +150,7 @@ class ProcessingService:
                         )
 
             job_manager.update_status(
+                self.db,
                 job_id,
                 JobStatus.COMPLETED,
             )
@@ -164,7 +165,13 @@ class ProcessingService:
                 except Exception:
                     pass
 
-            job_manager.update_status(
-                job_id,
-                JobStatus.FAILED,
-            )
+            # Update status to FAILED in current session before propagating
+            try:
+                job_manager.update_status(
+                    self.db,
+                    job_id,
+                    JobStatus.FAILED,
+                )
+            except Exception:
+                pass
+            raise err

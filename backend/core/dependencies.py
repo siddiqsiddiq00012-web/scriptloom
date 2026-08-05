@@ -12,6 +12,7 @@ from backend.models.media import Media
 from backend.models.transcript import Transcript, TranscriptSegment
 from backend.models.generated_content import GeneratedContent
 from backend.models.clip import Clip
+from backend.models.webhook import WebhookEndpoint
 
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="/api/v1/auth/login",
@@ -146,3 +147,21 @@ def verify_clip_ownership(
             detail="Clip not found."
         )
     return clip
+
+
+def verify_webhook_endpoint_ownership(
+    endpoint_id: int,
+    user: User,
+    db: Session,
+) -> WebhookEndpoint:
+    endpoint = (
+        db.query(WebhookEndpoint)
+        .filter(WebhookEndpoint.id == endpoint_id, WebhookEndpoint.user_id == user.id)
+        .first()
+    )
+    if endpoint is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Webhook endpoint not found."
+        )
+    return endpoint

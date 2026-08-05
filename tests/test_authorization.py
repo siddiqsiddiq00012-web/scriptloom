@@ -282,9 +282,13 @@ def test_processing_job_ownership_enforcement(auth_users):
     headers_a = auth_users["headers_a"]
     headers_b = auth_users["headers_b"]
 
-    # Register a mock job owned by User A
-    job = job_manager.create_job("usera_video.mp4", auth_users["user_a_id"])
-    job_id = job.job_id
+    # Register a mock job owned by User A using database session
+    db = SessionLocal()
+    try:
+        job = job_manager.create_job(db, media_id=auth_users["media_a_id"], user_id=auth_users["user_a_id"])
+        job_id = job.job_id
+    finally:
+        db.close()
 
     # User A can query it
     response_a = client.get(f"/processing/jobs/{job_id}", headers=headers_a)
