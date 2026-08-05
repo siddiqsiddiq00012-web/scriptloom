@@ -129,10 +129,15 @@ def test_api_transcription_failure_db_state(mock_transcribe):
     db.refresh(media)
 
     media_id = media.id
+    user_id = user.id
     db.close()
 
+    from backend.core.token import create_access_token
+    token = create_access_token({"sub": str(user_id)})
+    headers = {"Authorization": f"Bearer {token}"}
+
     # Call API which triggers mock failure
-    response = client.post(f"/media/{media_id}/transcribe")
+    response = client.post(f"/media/{media_id}/transcribe", headers=headers)
     assert response.status_code == 422
     assert response.json()["detail"] == "Failed to transcribe media: No speech detected or invalid audio."
 

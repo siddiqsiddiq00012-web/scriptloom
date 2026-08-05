@@ -43,10 +43,9 @@ class UploadService:
         project = self.projects.get_by_id(project_id)
 
         if project is None:
-            # Auto-create default project for immediate seamless uploads
-            project = self.projects.create_project(
-                owner_id=1,
-                name="Master Knowledge Workspace",
+            raise HTTPException(
+                status_code=404,
+                detail="Project not found.",
             )
 
         clean_original_name = Path(file.filename).name.replace("..", "").strip()

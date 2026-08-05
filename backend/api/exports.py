@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
+from backend.core.dependencies import get_current_user, verify_content_ownership, verify_media_ownership
 from backend.db.dependencies import get_db
+from backend.models.user import User
 from backend.services.export_engine import ExportEngine
 
 router = APIRouter(
@@ -14,8 +16,12 @@ router = APIRouter(
 def export_single_asset(
     content_id: int,
     format: str = Query("markdown", description="Format: markdown | txt | json"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Verify content ownership before exporting single asset
+    verify_content_ownership(content_id, current_user, db)
+
     engine = ExportEngine(db)
     try:
         filename, content_bytes, media_type = engine.export_single_content(
@@ -39,8 +45,12 @@ def export_single_asset(
 @router.get("/campaign-pack/{media_id}")
 def export_campaign_zip(
     media_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Verify media ownership before exporting campaign zip
+    verify_media_ownership(media_id, current_user, db)
+
     engine = ExportEngine(db)
     try:
         filename, zip_bytes, media_type = engine.export_campaign_zip(media_id)

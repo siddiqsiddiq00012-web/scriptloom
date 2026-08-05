@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from backend.core.dependencies import get_current_user
+from backend.core.dependencies import get_current_user, verify_media_ownership
 from backend.db.dependencies import get_db
 from backend.models.user import User
 from backend.schemas.creator_memory import (
@@ -27,6 +27,9 @@ def index_media_memory(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Verify media ownership before performing memory indexing operations
+    verify_media_ownership(media_id, current_user, db)
+
     service = CreatorMemoryService(db)
     count = service.index_media_transcript(user_id=current_user.id, media_id=media_id)
 

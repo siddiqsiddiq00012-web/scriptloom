@@ -9,6 +9,7 @@ from backend.main import app
 from backend.db.database import SessionLocal
 from backend.models.user import User
 from backend.models.project import Project
+from backend.core.token import create_access_token
 
 client = TestClient(app)
 
@@ -29,12 +30,17 @@ def test_media_pipeline_flow():
         db.commit()
         db.refresh(project)
 
+    user_id = user.id
     db.close()
+
+    token = create_access_token({"sub": str(user_id)})
+    headers = {"Authorization": f"Bearer {token}"}
 
     print("\n--- 1. Testing Unsupported Extension Rejection ---")
     bad_upload = client.post(
         f"/projects/{project.id}/media",
         files={"file": ("malicious_script.exe", b"binary_data", "application/octet-stream")},
+        headers=headers,
     )
     print("Bad Upload Status:", bad_upload.status_code)
     assert bad_upload.status_code == 400
@@ -44,6 +50,7 @@ def test_media_pipeline_flow():
     upload_response = client.post(
         f"/projects/{project.id}/media",
         files={"file": ("webinar_recording.wav", dummy_wav_header, "audio/wav")},
+        headers=headers,
     )
     print("Upload Status:", upload_response.status_code)
     print("Upload Output:", upload_response.json())
@@ -54,19 +61,19 @@ def test_media_pipeline_flow():
     assert media_data["status"] == "processed"
 
     print("\n--- 3. Testing Get Media & Waveform JSON ---")
-    media_get = client.get(f"/projects/media/{media_id}")
+    media_get = client.get(f"/projects/media/{media_id}", headers=headers)
     print("Media Get Status:", media_get.status_code)
     assert media_get.status_code == 200
     assert media_get.json()["id"] == media_id
 
-    waveform_get = client.get(f"/projects/media/{media_id}/waveform")
+    waveform_get = client.get(f"/projects/media/{media_id}/waveform", headers=headers)
     print("Waveform Status:", waveform_get.status_code)
     print("Waveform Output (first 5 peaks):", waveform_get.json()["peaks"][:5])
     assert waveform_get.status_code == 200
     assert len(waveform_get.json()["peaks"]) == 100
 
     print("\n--- 4. Testing Media Deletion ---")
-    del_response = client.delete(f"/projects/media/{media_id}")
+    del_response = client.delete(f"/projects/media/{media_id}", headers=headers)
     print("Delete Status:", del_response.status_code)
     assert del_response.status_code == 200
 

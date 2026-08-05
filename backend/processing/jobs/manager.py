@@ -7,11 +7,12 @@ class JobManager:
     def __init__(self):
         self.jobs: dict[str, ProcessingJob] = {}
 
-    def create_job(self, filename: str) -> ProcessingJob:
+    def create_job(self, filename: str, user_id: int) -> ProcessingJob:
         job = ProcessingJob(
             job_id=str(uuid.uuid4()),
             filename=filename,
             status=JobStatus.PENDING,
+            user_id=user_id,
         )
 
         self.jobs[job.job_id] = job

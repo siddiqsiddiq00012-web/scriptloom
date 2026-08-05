@@ -14,3 +14,4 @@ class ProcessingJob(BaseModel):
     job_id: str
     filename: str
     status: JobStatus
+    user_id: int

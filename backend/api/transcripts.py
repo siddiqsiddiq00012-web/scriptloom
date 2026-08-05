@@ -4,7 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.db.dependencies import get_db
-from backend.models.media import Media
+from backend.models.user import User
+from backend.core.dependencies import (
+    get_current_user,
+    verify_media_ownership,
+    verify_segment_ownership,
+)
 from backend.processing.stt_engine import STTEngine, STTConfigurationError, STTTranscriptionError
 from backend.repositories.media_repository import MediaRepository
 from backend.repositories.transcript_repository import TranscriptRepository
@@ -26,16 +31,11 @@ router = APIRouter(
 )
 def transcribe_media(
     media_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    media_repo = MediaRepository(db)
-    media = media_repo.get_by_id(media_id)
-
-    if media is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Media not found",
-        )
+    # Verify media ownership before starting transcription
+    media = verify_media_ownership(media_id, current_user, db)
 
     # Locate extracted audio WAV file
     media_path = Path(media.storage_path)
@@ -91,10 +91,14 @@ def transcribe_media(
 )
 def get_media_transcript(
     media_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Verify media ownership before retrieving transcript
+    media = verify_media_ownership(media_id, current_user, db)
+
     transcript_repo = TranscriptRepository(db)
-    transcript = transcript_repo.get_by_media_id(media_id)
+    transcript = transcript_repo.get_by_media_id(media.id)
 
     if transcript is None:
         raise HTTPException(
@@ -112,8 +116,12 @@ def get_media_transcript(
 def update_transcript_segment(
     segment_id: int,
     update_data: SegmentUpdate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Verify segment ownership before editing
+    verify_segment_ownership(segment_id, current_user, db)
+
     transcript_repo = TranscriptRepository(db)
     updated_segment = transcript_repo.update_segment(
         segment_id=segment_id,

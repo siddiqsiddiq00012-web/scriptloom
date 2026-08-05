@@ -42,6 +42,7 @@ def test_generation_engine_flow():
     upload_res = client.post(
         f"/projects/{project_id}/media",
         files={"file": ("masterclass_talk.wav", dummy_wav_header, "audio/wav")},
+        headers=headers,
     )
     media_id = upload_res.json()["id"]
 
@@ -49,12 +50,12 @@ def test_generation_engine_flow():
     from unittest.mock import patch
     from tests.mock_stt_data import MOCK_STT_RESPONSE
     with patch("backend.processing.stt_engine.STTEngine.transcribe", return_value=MOCK_STT_RESPONSE):
-        client.post(f"/media/{media_id}/transcribe")
+        client.post(f"/media/{media_id}/transcribe", headers=headers)
         
     client.post(f"/creator-memory/index/{media_id}", headers=headers)
 
     print("\n--- 2. Triggering Multi-Platform Campaign Pack Generation ---")
-    gen_res = client.post(f"/generation/campaign-pack/{media_id}")
+    gen_res = client.post(f"/generation/campaign-pack/{media_id}", headers=headers)
     print("Generation Status:", gen_res.status_code)
     print("Generated Assets Count:", gen_res.json()["count"])
 
@@ -79,7 +80,7 @@ def test_generation_engine_flow():
     print("Zero-slop verification PASSED! No banned jargon found.")
 
     print("\n--- 4. Fetching Campaign Pack Assets ---")
-    get_res = client.get(f"/generation/campaign-pack/{media_id}")
+    get_res = client.get(f"/generation/campaign-pack/{media_id}", headers=headers)
     print("Get Pack Status:", get_res.status_code)
     assert get_res.status_code == 200
     assert get_res.json()["count"] == 4
@@ -90,6 +91,7 @@ def test_generation_engine_flow():
     edit_res = client.put(
         f"/generation/content/{first_asset_id}",
         json={"title": new_title},
+        headers=headers,
     )
     print("Edit Status:", edit_res.status_code)
     print("Edit Title Output:", edit_res.json()["title"])

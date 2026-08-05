@@ -5,7 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from sqlalchemy.orm import Session
 
 from backend.db.dependencies import get_db
-from backend.repositories.media_repository import MediaRepository
+from backend.models.user import User
+from backend.core.dependencies import (
+    get_current_user,
+    verify_project_ownership,
+    verify_media_ownership,
+)
 from backend.schemas.media import MediaResponse
 from backend.services.upload_service import UploadService
 
@@ -22,8 +27,12 @@ router = APIRouter(
 async def upload_media(
     project_id: int,
     file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Validate project ownership at the very beginning of the endpoint
+    verify_project_ownership(project_id, current_user, db)
+
     service = UploadService(db)
 
     return await service.upload(
@@ -35,16 +44,11 @@ async def upload_media(
 @router.get("/media/{media_id}")
 def get_media(
     media_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    repository = MediaRepository(db)
-    media = repository.get_by_id(media_id)
-
-    if media is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Media not found",
-        )
+    # Retrieve media by verifying ownership directly
+    media = verify_media_ownership(media_id, current_user, db)
 
     return {
         "id": media.id,
@@ -65,16 +69,11 @@ def get_media(
 @router.get("/media/{media_id}/waveform")
 def get_media_waveform(
     media_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    repository = MediaRepository(db)
-    media = repository.get_by_id(media_id)
-
-    if media is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Media not found",
-        )
+    # Retrieve media by verifying ownership directly
+    media = verify_media_ownership(media_id, current_user, db)
 
     from backend.processing.waveform_processor import WaveformProcessor
 
@@ -95,16 +94,11 @@ def get_media_waveform(
 @router.delete("/media/{media_id}")
 def delete_media(
     media_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    repository = MediaRepository(db)
-    media = repository.get_by_id(media_id)
-
-    if media is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Media not found",
-        )
+    # Retrieve media by verifying ownership directly
+    media = verify_media_ownership(media_id, current_user, db)
 
     # Clean up files
     try:
@@ -116,4 +110,4 @@ def delete_media(
     db.delete(media)
     db.commit()
 
-    return {"message": "Media deleted successfully", "media_id": media_id}
+    return {"message": "Media deleted successfully", "media_id": media.id}

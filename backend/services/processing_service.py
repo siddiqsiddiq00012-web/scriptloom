@@ -23,6 +23,7 @@ class ProcessingService:
     def create_job(
         self,
         media_id: int,
+        user_id: int,
     ) -> tuple[ProcessingJob, str, str]:
 
         media = self.media_repository.get_by_id(media_id)
@@ -48,7 +49,7 @@ class ProcessingService:
             exist_ok=True,
         )
 
-        job = job_manager.create_job(media.filename)
+        job = job_manager.create_job(media.filename, user_id)
 
         return (
             job,
