@@ -1,6 +1,15 @@
 import os
-import re
 from pathlib import Path
+
+
+class STTConfigurationError(Exception):
+    """Raised when the transcription provider is misconfigured or libraries are missing."""
+    pass
+
+
+class STTTranscriptionError(Exception):
+    """Raised when transcription execution fails or empty/no-speech result is produced."""
+    pass
 
 
 class STTEngine:
@@ -19,8 +28,10 @@ class STTEngine:
             try:
                 from faster_whisper import WhisperModel
                 self._model = WhisperModel(self.model_size, device="cpu", compute_type="int8")
-            except Exception:
-                self._model = None
+            except Exception as e:
+                raise STTConfigurationError(
+                    f"Failed to load Whisper model '{self.model_size}': {e}"
+                ) from e
 
     def transcribe(self, audio_wav_path: str | Path) -> dict:
         audio_str = str(audio_wav_path)
@@ -33,46 +44,23 @@ class STTEngine:
         detected_language = "en"
         duration = 0.0
 
-        if self._model is not None:
-            try:
-                segments, info = self._model.transcribe(audio_str, beam_size=5)
-                detected_language = info.language
-                duration = info.duration
+        try:
+            segments, info = self._model.transcribe(audio_str, beam_size=5)
+            detected_language = info.language
+            duration = info.duration
 
-                for s in segments:
-                    raw_segments.append({
-                        "start": round(s.start, 2),
-                        "end": round(s.end, 2),
-                        "text": s.text.strip(),
-                    })
-            except Exception as e:
-                print(f"[STTEngine Warning] Whisper execution note: {e}")
+            for s in segments:
+                raw_segments.append({
+                    "start": round(s.start, 2),
+                    "end": round(s.end, 2),
+                    "text": s.text.strip(),
+                })
+        except Exception as e:
+            raise STTTranscriptionError(f"Whisper transcription failed: {e}") from e
 
-        # High-Fidelity Pre-Parser Fallback / Enrichment
+        # Empty/no-speech transcription must not be considered successful
         if not raw_segments:
-            raw_segments = [
-                {
-                    "start": 0.0,
-                    "end": 18.5,
-                    "text": "Every week, executive founders and product leaders spend hours in webinars, podcasts, and keynotes articulating core positioning.",
-                },
-                {
-                    "start": 19.0,
-                    "end": 42.0,
-                    "text": "Yet, traditional systems for capturing and deploying this expertise are broken—diluted into low-context, robotic AI slop.",
-                },
-                {
-                    "start": 42.5,
-                    "end": 75.0,
-                    "text": "Scriptloom eliminates this translation gap through Voice DNA and persistent Brand Memory, producing zero-edit multi-platform campaign packs.",
-                },
-                {
-                    "start": 75.5,
-                    "end": 110.0,
-                    "text": "As the marginal cost of text generation approaches zero, authentic spoken human conviction becomes your only defensible commercial strategy.",
-                },
-            ]
-            duration = 110.0
+            raise STTTranscriptionError("No speech detected or transcription is empty.")
 
         # Perform Diarization & Topic Segmentation
         enriched_segments = []

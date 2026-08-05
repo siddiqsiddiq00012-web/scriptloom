@@ -41,7 +41,11 @@ def test_export_engine_flow():
     )
     media_id = upload_res.json()["id"]
 
-    client.post(f"/media/{media_id}/transcribe")
+    from unittest.mock import patch
+    from tests.mock_stt_data import MOCK_STT_RESPONSE
+    with patch("backend.processing.stt_engine.STTEngine.transcribe", return_value=MOCK_STT_RESPONSE):
+        client.post(f"/media/{media_id}/transcribe")
+        
     gen_res = client.post(f"/generation/campaign-pack/{media_id}")
     assets = gen_res.json()["assets"]
     first_asset_id = assets[0]["id"]

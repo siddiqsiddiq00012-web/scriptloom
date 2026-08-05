@@ -46,7 +46,11 @@ def test_generation_engine_flow():
     media_id = upload_res.json()["id"]
 
     # Transcribe & index memory
-    client.post(f"/media/{media_id}/transcribe")
+    from unittest.mock import patch
+    from tests.mock_stt_data import MOCK_STT_RESPONSE
+    with patch("backend.processing.stt_engine.STTEngine.transcribe", return_value=MOCK_STT_RESPONSE):
+        client.post(f"/media/{media_id}/transcribe")
+        
     client.post(f"/creator-memory/index/{media_id}", headers=headers)
 
     print("\n--- 2. Triggering Multi-Platform Campaign Pack Generation ---")

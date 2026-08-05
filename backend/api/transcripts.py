@@ -1,10 +1,11 @@
+import logging
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.db.dependencies import get_db
 from backend.models.media import Media
-from backend.processing.stt_engine import STTEngine
+from backend.processing.stt_engine import STTEngine, STTConfigurationError, STTTranscriptionError
 from backend.repositories.media_repository import MediaRepository
 from backend.repositories.transcript_repository import TranscriptRepository
 from backend.schemas.transcript import (
@@ -45,7 +46,27 @@ def transcribe_media(
         audio_wav_path = media_path
 
     stt_engine = STTEngine()
-    stt_result = stt_engine.transcribe(audio_wav_path)
+    
+    try:
+        stt_result = stt_engine.transcribe(audio_wav_path)
+    except STTConfigurationError as e:
+        logging.error(f"[STTEngine Config Error] {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Transcription provider is misconfigured or unavailable."
+        )
+    except STTTranscriptionError as e:
+        logging.error(f"[STTEngine Transcription Error] {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Failed to transcribe media: No speech detected or invalid audio."
+        )
+    except Exception as e:
+        logging.error(f"[STTEngine Unexpected Error] {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred during transcription."
+        )
 
     transcript_repo = TranscriptRepository(db)
     transcript = transcript_repo.create_transcript(

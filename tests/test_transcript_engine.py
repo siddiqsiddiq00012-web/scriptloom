@@ -39,8 +39,12 @@ def test_transcript_engine_flow():
     assert upload_res.status_code == 200
     media_id = upload_res.json()["id"]
 
+    from unittest.mock import patch
+    from tests.mock_stt_data import MOCK_STT_RESPONSE
+
     print("\n--- 2. Triggering Speech-to-Text & Topic Segmentation ---")
-    transcribe_res = client.post(f"/media/{media_id}/transcribe")
+    with patch("backend.processing.stt_engine.STTEngine.transcribe", return_value=MOCK_STT_RESPONSE):
+        transcribe_res = client.post(f"/media/{media_id}/transcribe")
     print("Transcribe Status:", transcribe_res.status_code)
     print("Transcribe Output:", transcribe_res.json()["summary"])
 
