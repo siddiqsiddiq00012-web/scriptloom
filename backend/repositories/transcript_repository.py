@@ -81,22 +81,18 @@ class TranscriptRepository:
 
     def update_segment(
         self,
-        segment_id: int,
+        segment: TranscriptSegment,
         speaker_label: str | None = None,
         text: str | None = None,
         chapter_title: str | None = None,
-    ) -> TranscriptSegment | None:
-        seg = self.get_segment_by_id(segment_id)
-        if seg is None:
-            return None
-
+    ) -> TranscriptSegment:
         if speaker_label is not None:
-            seg.speaker_label = speaker_label
+            segment.speaker_label = speaker_label
         if text is not None:
-            seg.text = text
+            segment.text = text
         if chapter_title is not None:
-            seg.chapter_title = chapter_title
+            segment.chapter_title = chapter_title
 
         self.db.commit()
-        self.db.refresh(seg)
-        return seg
+        self.db.refresh(segment)
+        return segment

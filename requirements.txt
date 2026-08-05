@@ -104,3 +104,5 @@ uvicorn==0.51.0
 vine==5.1.0
 wcwidth==0.8.2
 websockets==16.1.1
+boto3==1.36.14
+

@@ -11,6 +11,7 @@ from backend.models.project import Project
 from backend.models.media import Media
 from backend.models.transcript import Transcript, TranscriptSegment
 from backend.models.generated_content import GeneratedContent
+from backend.models.clip import Clip
 
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="/api/v1/auth/login",
@@ -126,3 +127,22 @@ def verify_segment_ownership(
             detail="Transcript segment not found."
         )
     return segment
+
+
+def verify_clip_ownership(
+    clip_id: int,
+    user: User,
+    db: Session,
+) -> Clip:
+    clip = (
+        db.query(Clip)
+        .join(Project, Clip.project_id == Project.id)
+        .filter(Clip.id == clip_id, Project.owner_id == user.id)
+        .first()
+    )
+    if clip is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Clip not found."
+        )
+    return clip

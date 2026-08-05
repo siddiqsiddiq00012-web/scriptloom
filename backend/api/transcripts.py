@@ -119,21 +119,15 @@ def update_transcript_segment(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    # Verify segment ownership before editing
-    verify_segment_ownership(segment_id, current_user, db)
+    # Verify segment ownership before editing, returning the authorized object directly
+    segment = verify_segment_ownership(segment_id, current_user, db)
 
     transcript_repo = TranscriptRepository(db)
     updated_segment = transcript_repo.update_segment(
-        segment_id=segment_id,
+        segment=segment,
         speaker_label=update_data.speaker_label,
         text=update_data.text,
         chapter_title=update_data.chapter_title,
     )
-
-    if updated_segment is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Transcript segment not found",
-        )
 
     return TranscriptSegmentResponse.model_validate(updated_segment)

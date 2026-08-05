@@ -59,6 +59,43 @@ class Settings(BaseSettings):
     CSP_ENVIRONMENT: str = "development"  # 'development' | 'production'
     HSTS_ENABLED: bool = False
 
+    # Storage Backend Configuration
+    STORAGE_BACKEND: str = "local"
+    LOCAL_STORAGE_ROOT: str = "media"
+    R2_ENDPOINT_URL: str = ""
+    R2_BUCKET_NAME: str = ""
+    R2_ACCESS_KEY_ID: str = ""
+    R2_SECRET_ACCESS_KEY: str = ""
+
+    @field_validator("STORAGE_BACKEND")
+    @classmethod
+    def validate_backend(cls, v: str) -> str:
+        v_lower = v.lower()
+        if v_lower not in ("local", "r2"):
+            raise ValueError("STORAGE_BACKEND must be either 'local' or 'r2'")
+        return v_lower
+
+    from pydantic import model_validator
+    @model_validator(mode="after")
+    def validate_storage_settings(self) -> "Settings":
+        backend = self.STORAGE_BACKEND.lower()
+        if backend == "r2":
+            missing = []
+            if not self.R2_ENDPOINT_URL:
+                missing.append("R2_ENDPOINT_URL")
+            if not self.R2_BUCKET_NAME:
+                missing.append("R2_BUCKET_NAME")
+            if not self.R2_ACCESS_KEY_ID:
+                missing.append("R2_ACCESS_KEY_ID")
+            if not self.R2_SECRET_ACCESS_KEY:
+                missing.append("R2_SECRET_ACCESS_KEY")
+            if missing:
+                raise ValueError(f"Missing required R2 credentials when STORAGE_BACKEND is 'r2': {', '.join(missing)}")
+        elif backend == "local":
+            if not self.LOCAL_STORAGE_ROOT:
+                raise ValueError("LOCAL_STORAGE_ROOT must be set when STORAGE_BACKEND is 'local'")
+        return self
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",

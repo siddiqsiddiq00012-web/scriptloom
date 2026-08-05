@@ -207,7 +207,7 @@ def test_nonexistent_resource_produces_404(auth_users):
     assert client.get(f"/stream/progress/{non_id}", headers=headers).status_code == 404
 
 
-@patch("backend.storage.manager.storage.save")
+@patch("backend.storage.manager.storage.save_stream")
 @patch("backend.services.ffprobe_service.FFprobeService.extract_metadata")
 def test_unauthorized_upload_has_no_file_persistence(mock_metadata, mock_save, auth_users):
     # User B trying to upload to Project A

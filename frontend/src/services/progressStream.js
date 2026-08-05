@@ -1,3 +1,5 @@
+import { config } from "../config";
+
 /**
  * Scriptloom Decoupled SSE Progress Stream Service
  */
@@ -21,7 +23,7 @@ class ProgressStreamService {
     this.connectionState = "CONNECTING";
     this.notifyListeners({ type: "connection_change", state: "CONNECTING" });
 
-    const url = `/api/v1/stream/progress/${mediaId}`;
+    const url = `${config.apiUrl}/stream/progress/${mediaId}`;
     const token = localStorage.getItem("token");
     const headers = token ? { "Authorization": `Bearer ${token}` } : {};
 
