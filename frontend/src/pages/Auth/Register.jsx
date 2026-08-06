@@ -26,10 +26,7 @@ function Register() {
 
     try {
       await registerUser(name, email, password);
-      setSuccess(true);
-      setTimeout(() => {
-        navigate("/dashboard");
-      }, 600);
+      navigate("/dashboard");
     } catch (err) {
       setError(err.message || "Registration failed. Email may already be registered.");
     } finally {

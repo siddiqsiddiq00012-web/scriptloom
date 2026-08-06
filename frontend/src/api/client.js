@@ -23,7 +23,6 @@ export async function apiRequest(endpoint, options = {}) {
   if (!response.ok) {
     if (response.status === 401) {
       localStorage.removeItem("token");
-      localStorage.removeItem("scriptloom_auth_token");
       localStorage.removeItem("user_email");
       localStorage.removeItem("user_name");
       localStorage.removeItem("user_avatar");

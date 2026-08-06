@@ -141,3 +141,39 @@ def list_user_jobs(
         }
         for job in jobs
     ]
+
+@router.get("/media/{media_id}/jobs/latest")
+def get_latest_job_for_media(
+    media_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get the most recent processing job for a specific media resource.
+    """
+    # 1. Verify media ownership
+    verify_media_ownership(media_id, current_user, db)
+
+    # 2. Query the latest job for this media
+    job = (
+        db.query(ProcessingJob)
+        .filter(ProcessingJob.media_id == media_id)
+        .order_by(desc(ProcessingJob.created_at))
+        .first()
+    )
+
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No processing jobs found for this media.",
+        )
+
+    return {
+        "job_id": job.job_id,
+        "media_id": job.media_id,
+        "user_id": job.user_id,
+        "status": job.status,
+        "error_message": job.error_message,
+        "created_at": job.created_at,
+        "updated_at": job.updated_at,
+    }

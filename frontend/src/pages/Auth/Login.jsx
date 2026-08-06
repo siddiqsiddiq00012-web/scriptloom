@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import "./Login.css";
 import { loginUser, loginWithGoogle } from "../../api/auth";
 import { ArrowRight, Lock, Mail, AlertCircle, CheckCircle2 } from "lucide-react";
+import { useGoogleLogin } from "@react-oauth/google";
 
 function Login() {
   const navigate = useNavigate();
@@ -12,32 +13,29 @@ function Login() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  const handleGoogleLogin = async () => {
-    let targetEmail = email;
-    if (!targetEmail) {
-      targetEmail = window.prompt("Enter your Gmail address to sign in with Google:", "creator@gmail.com");
-    }
-    if (!targetEmail) return;
+  const googleLogin = useGoogleLogin({
+    flow: 'implicit',
+    onSuccess: async (tokenResponse) => {
+      setLoading(true);
+      setError("");
+      try {
+        await loginWithGoogle(tokenResponse.access_token);
+        setSuccess(true);
+        navigate("/dashboard");
+      } catch (err) {
+        setError(err.message || "Google authentication failed.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    onError: (errorResponse) => {
+      setError("Google authentication failed.");
+      console.error(errorResponse);
+    },
+  });
 
-    const name = targetEmail.split("@")[0].replace(".", " ");
-    const formattedName = name.charAt(0).toUpperCase() + name.slice(1);
-
-    setLoading(true);
-    setError("");
-
-    try {
-      await loginWithGoogle(
-        targetEmail,
-        formattedName,
-        "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80"
-      );
-      setSuccess(true);
-      setTimeout(() => navigate("/dashboard"), 500);
-    } catch (err) {
-      setError(err.message || "Google authentication failed.");
-    } finally {
-      setLoading(false);
-    }
+  const handleGoogleLogin = () => {
+    googleLogin();
   };
 
   const handleSubmit = async (e) => {
@@ -52,10 +50,7 @@ function Login() {
 
     try {
       await loginUser(email, password);
-      setSuccess(true);
-      setTimeout(() => {
-        navigate("/dashboard");
-      }, 600);
+      navigate("/dashboard");
     } catch (err) {
       setError(err.message || "Authentication failed. Please check your credentials.");
     } finally {

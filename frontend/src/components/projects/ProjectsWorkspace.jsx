@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import "./ProjectsWorkspace.css";
 import { Folder, Plus, Search, ArrowUpRight, Sparkles, FolderPlus } from "lucide-react";
 import { getProjects, createProject } from "../../api/projects";
 
 function ProjectsWorkspace({ onOpenUpload }) {
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [projectsList, setProjectsList] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -25,16 +27,19 @@ function ProjectsWorkspace({ onOpenUpload }) {
   }, []);
 
   const handleCreateNewProject = async () => {
+    const name = window.prompt("Enter new project name:", "My Content Project");
+    if (!name) return;
+    
     try {
       const newProj = await createProject({
-        name: "Default Creator Campaign Project",
+        name: name,
         description: "Organize multi-channel content packs",
       });
       if (newProj) {
         setProjectsList([...projectsList, newProj]);
       }
     } catch (err) {
-      if (onOpenUpload) onOpenUpload();
+      console.error("Failed to create project", err);
     }
   };
 
@@ -84,11 +89,30 @@ function ProjectsWorkspace({ onOpenUpload }) {
         <div className="projectsWorkspace__grid">
           {filtered.map((proj) => (
             <div key={proj.id} className="projectsWorkspace__card">
-              <div className="projectsWorkspace__cardHeader">
-                <div className="projectsWorkspace__folderIcon">
-                  <Folder size={20} color="#4F46E5" />
+              <div className="projectsWorkspace__cardHeader" style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div className="projectsWorkspace__folderIcon">
+                    <Folder size={20} color="#4F46E5" />
+                  </div>
+                  <span className="projectsWorkspace__badge">{proj.category || "Active Project"}</span>
                 </div>
-                <span className="projectsWorkspace__badge">{proj.category || "Active Project"}</span>
+                <button 
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626' }}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if(window.confirm("Are you sure you want to delete this project?")) {
+                      try {
+                        const { deleteProject } = await import("../../api/projects");
+                        await deleteProject(proj.id);
+                        setProjectsList(projectsList.filter(p => p.id !== proj.id));
+                      } catch(err) {
+                        console.error("Failed to delete", err);
+                      }
+                    }
+                  }}
+                >
+                  Delete
+                </button>
               </div>
 
               <h3>{proj.name || proj.title}</h3>
@@ -105,7 +129,7 @@ function ProjectsWorkspace({ onOpenUpload }) {
                 </div>
               </div>
 
-              <button className="projectsWorkspace__openBtn" onClick={onOpenUpload}>
+              <button className="projectsWorkspace__openBtn" onClick={() => navigate(`/projects/${proj.id}`)}>
                 <span>Open Project</span>
                 <ArrowUpRight size={16} />
               </button>
