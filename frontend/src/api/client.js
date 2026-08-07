@@ -35,10 +35,12 @@ export async function apiRequest(endpoint, options = {}) {
     try {
       const errJson = await response.json();
       errorDetail = errJson.detail || errorDetail;
-    } catch (e) {
+    } catch {
       // fallback
     }
-    throw new Error(errorDetail);
+    const error = new Error(errorDetail);
+    error.status = response.status;
+    throw error;
   }
 
   // Handle binary blob responses (e.g. ZIP export)

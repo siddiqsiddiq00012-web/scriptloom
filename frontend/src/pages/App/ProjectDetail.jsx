@@ -1,9 +1,51 @@
-import React, { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { getProject } from "../../api/projects";
 import { getProjectMedia, uploadMediaFile, deleteMediaFile } from "../../api/media";
-import { startProcessing } from "../../api/processing";
-import { Upload, Trash2, Video, FileAudio, PlayCircle, Loader2 } from "lucide-react";
+import { Upload, Trash2, Video, FileAudio, PlayCircle, Loader2, ArrowLeft } from "lucide-react";
+import "./ProjectDetail.css";
+
+const VIDEO_EXTENSIONS = /\.(mp4|mov|avi|mkv|webm|m4v|mpeg|mpg|wmv|flv|3gp|ts|mts)$/i;
+
+const isVideo = (filename) => VIDEO_EXTENSIONS.test(filename || "");
+
+const statusTone = (status) => {
+  const value = String(status || "").toLowerCase();
+  if (value.includes("error") || value.includes("fail")) return "error";
+  if (
+    value === "processed" ||
+    value.includes("done") ||
+    value.includes("ready") ||
+    value.includes("complete") ||
+    value.includes("transcribed")
+  ) {
+    return "success";
+  }
+  if (value.includes("process") || value.includes("pending")) return "processing";
+  return "default";
+};
+
+const formatFileSize = (bytes) => {
+  if (bytes === null || bytes === undefined) return "—";
+  const size = Number(bytes);
+  if (!Number.isFinite(size) || size < 0) return "—";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(2)} MB`;
+  return `${(size / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+};
+
+const formatDuration = (seconds) => {
+  if (seconds === null || seconds === undefined) return "—";
+  const total = Math.round(Number(seconds));
+  if (!Number.isFinite(total) || total < 0) return "—";
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  const mm = String(minutes).padStart(2, "0");
+  const ss = String(secs).padStart(2, "0");
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${minutes}:${ss}`;
+};
 
 export default function ProjectDetail() {
   const { projectId } = useParams();
@@ -15,38 +57,48 @@ export default function ProjectDetail() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [projData, mediaData] = await Promise.all([
-        getProject(projectId),
-        getProjectMedia(projectId),
-      ]);
-      setProject(projData);
-      setMediaList(mediaData);
-    } catch (err) {
-      setError("Failed to load project details.");
-    } finally {
-      setLoading(false);
-    }
+  const fetchProjectData = useCallback(async () => {
+    const [projData, mediaData] = await Promise.all([
+      getProject(projectId),
+      getProjectMedia(projectId),
+    ]);
+    return { project: projData, media: mediaData };
+  }, [projectId]);
+
+  const loadData = useCallback(() => {
+    fetchProjectData()
+      .then(({ project, media }) => {
+        setError("");
+        setProject(project);
+        setMediaList(Array.isArray(media) ? media : []);
+      })
+      .catch(() => setError("Failed to load project details."))
+      .finally(() => setLoading(false));
+  }, [fetchProjectData]);
+
+  const handleRetry = () => {
+    setError("");
+    setLoading(true);
+    loadData();
   };
 
   useEffect(() => {
     loadData();
-  }, [projectId]);
+  }, [loadData]);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploading(true);
-    setError("");
+    setActionError("");
     try {
       await uploadMediaFile(projectId, file);
       await loadData();
     } catch (err) {
-      setError("Upload failed: " + (err.message || "Unknown error"));
+      setActionError("Upload failed: " + (err.message || "Unknown error"));
     } finally {
       setUploading(false);
       if (fileInputRef.current) {
@@ -57,78 +109,110 @@ export default function ProjectDetail() {
 
   const handleDeleteMedia = async (mediaId) => {
     if (!window.confirm("Delete this media?")) return;
+
+    setActionError("");
     try {
       await deleteMediaFile(mediaId);
-      setMediaList(mediaList.filter(m => m.id !== mediaId));
-    } catch (err) {
-      setError("Failed to delete media.");
+      setMediaList((prev) => prev.filter((m) => m.id !== mediaId));
+    } catch {
+      setActionError("Failed to delete media. Please try again.");
     }
   };
 
-  if (loading) return <div style={{ padding: "20px" }}><Loader2 className="lucide-spin" /> Loading project...</div>;
-  if (error) return <div style={{ padding: "20px", color: "red" }}>{error}</div>;
+  if (loading) {
+    return (
+      <div className="project-detail__state">
+        <Loader2 size={32} className="project-detail__spinner" />
+        <p>Loading project...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="project-detail__state">
+        <p className="project-detail__state-error">{error}</p>
+        <button className="project-detail__retry-btn" onClick={handleRetry}>
+          Try Again
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ padding: "20px", maxWidth: "1200px", margin: "0 auto", width: "100%" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px" }}>
-        <div>
-          <button onClick={() => navigate("/dashboard")} style={{ background: "none", border: "none", cursor: "pointer", color: "#4F46E5", marginBottom: "10px" }}>
-            &larr; Back to Dashboard
+    <div className="project-detail">
+      <header className="project-detail__header">
+        <div className="project-detail__header-left">
+          <button className="project-detail__back" onClick={() => navigate("/dashboard")}>
+            <ArrowLeft size={16} /> Back to Dashboard
           </button>
-          <h1 style={{ fontSize: "24px", margin: 0 }}>{project?.name || project?.title || "Project Workspace"}</h1>
+          <h1 className="project-detail__title">{project?.name || "Project Workspace"}</h1>
         </div>
-        
-        <div>
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            style={{ display: "none" }} 
-            onChange={handleFileUpload} 
-            accept="video/*,audio/*" 
+
+        <div className="project-detail__header-right">
+          <input
+            type="file"
+            ref={fileInputRef}
+            className="project-detail__file-input"
+            onChange={handleFileUpload}
+            accept="video/*,audio/*"
           />
-          <button 
+          <button
+            className="project-detail__upload-btn"
             disabled={uploading}
-            onClick={() => fileInputRef.current?.click()} 
-            style={{ display: "flex", alignItems: "center", gap: "8px", background: "#4F46E5", color: "white", padding: "10px 16px", borderRadius: "8px", border: "none", cursor: uploading ? "not-allowed" : "pointer" }}
+            onClick={() => fileInputRef.current?.click()}
           >
-            {uploading ? <Loader2 size={16} className="lucide-spin" /> : <Upload size={16} />}
+            {uploading ? <Loader2 size={16} className="project-detail__spinner" /> : <Upload size={16} />}
             {uploading ? "Uploading..." : "Upload Media"}
           </button>
         </div>
-      </div>
+      </header>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "20px" }}>
+      {actionError && <div className="project-detail__notice project-detail__notice--error">{actionError}</div>}
+
+      <div className="project-detail__media-grid">
         {mediaList.length === 0 ? (
-          <div style={{ gridColumn: "1 / -1", padding: "40px", textAlign: "center", background: "#f8fafc", borderRadius: "8px", border: "2px dashed #cbd5e1" }}>
-            <Video size={48} color="#94a3b8" style={{ margin: "0 auto 10px" }} />
-            <h3 style={{ margin: "0 0 10px" }}>No media uploaded yet</h3>
-            <p style={{ margin: 0, color: "#64748b" }}>Upload a video or audio file to start generating content.</p>
+          <div className="project-detail__empty">
+            <div className="project-detail__empty-icon">
+              <Video size={44} />
+            </div>
+            <h3>No media uploaded yet</h3>
+            <p>Upload a video or audio file to start generating content.</p>
           </div>
         ) : (
-          mediaList.map(media => (
-            <div key={media.id} style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", overflow: "hidden" }}>
-              <div style={{ padding: "16px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", overflow: "hidden" }}>
-                  {media.filename?.match(/\.(mp4|mov|avi|mkv|webm)$/i) ? <Video size={20} color="#4F46E5" /> : <FileAudio size={20} color="#4F46E5" />}
-                  <span style={{ fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={media.filename}>
+          mediaList.map((media) => (
+            <div key={media.id} className="project-detail__card">
+              <div className="project-detail__card-header">
+                <div className="project-detail__card-title">
+                  <span className="project-detail__file-icon">
+                    {isVideo(media.filename) ? <Video size={20} /> : <FileAudio size={20} />}
+                  </span>
+                  <span className="project-detail__filename" title={media.filename}>
                     {media.filename}
                   </span>
                 </div>
+                <span className={`project-detail__status project-detail__status--${statusTone(media.status)}`}>
+                  {media.status}
+                </span>
               </div>
-              <div style={{ padding: "16px" }}>
-                <p style={{ margin: "0 0 8px", fontSize: "14px", color: "#64748b" }}>Status: <strong style={{ color: "#1e293b" }}>{media.status}</strong></p>
-                <p style={{ margin: "0 0 16px", fontSize: "14px", color: "#64748b" }}>Size: {(media.file_size / (1024 * 1024)).toFixed(2)} MB</p>
-                
-                <div style={{ display: "flex", gap: "10px" }}>
-                  <button 
+
+              <div className="project-detail__card-body">
+                <div className="project-detail__meta">
+                  <span className="project-detail__meta-item">{formatFileSize(media.file_size)}</span>
+                  <span className="project-detail__meta-item">{formatDuration(media.duration)}</span>
+                  {media.codec && <span className="project-detail__meta-item">{media.codec}</span>}
+                </div>
+
+                <div className="project-detail__card-actions">
+                  <button
+                    className="project-detail__open-btn"
                     onClick={() => navigate(`/projects/${projectId}/media/${media.id}`)}
-                    style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", background: "#f1f5f9", border: "1px solid #cbd5e1", padding: "8px", borderRadius: "6px", cursor: "pointer", color: "#334155" }}
                   >
                     <PlayCircle size={16} /> Open Workspace
                   </button>
-                  <button 
+                  <button
+                    className="project-detail__delete-btn"
                     onClick={() => handleDeleteMedia(media.id)}
-                    style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#ef4444", padding: "8px", borderRadius: "6px", cursor: "pointer" }}
                     title="Delete Media"
                   >
                     <Trash2 size={16} />

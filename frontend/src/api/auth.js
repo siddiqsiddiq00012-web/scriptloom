@@ -88,7 +88,7 @@ export async function getCurrentUser() {
       if (user.avatar_url) localStorage.setItem("user_avatar", user.avatar_url);
     }
     return user;
-  } catch (err) {
+  } catch {
     return null;
   }
 }

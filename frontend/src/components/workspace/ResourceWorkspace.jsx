@@ -1,12 +1,74 @@
-import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { getMediaDetails, getMediaWaveform } from "../../api/media";
-import { getProcessingJob, startProcessing } from "../../api/processing";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import {
+  AlertCircle,
+  ArrowLeft,
+  Check,
+  CheckCircle2,
+  Clock,
+  Download,
+  FileText,
+  Film,
+  Loader2,
+  Pencil,
+  PlayCircle,
+  Sparkles,
+  X,
+} from "lucide-react";
+import { api } from "../../api/client";
+import { config } from "../../config";
+import { getMediaDetails, getMediaTranscript, transcribeMedia } from "../../api/media";
+import { getProcessingJob, getLatestJobForMedia, startProcessing } from "../../api/processing";
 import { getProjectClips, getClipStreamUrl } from "../../api/clips";
 import { generateCampaignPack, getCampaignPack, updateGeneratedContent } from "../../api/generation";
 import { exportContentAsset, exportCampaignPack } from "../../api/exports";
-import { Loader2, ArrowLeft, PlayCircle, FileText, Film, Sparkles, AlertCircle, Download } from "lucide-react";
+import { progressStream } from "../../services/progressStream";
 import "./ResourceWorkspace.css";
+
+const VIDEO_EXT_RE = /\.(mp4|mov|m4v|avi|mkv|webm|ogv|wmv|flv)$/i;
+
+function formatFileSize(bytes) {
+  if (bytes === null || bytes === undefined) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatDuration(seconds) {
+  if (seconds === null || seconds === undefined) return "—";
+  const total = Math.max(0, Math.floor(Number(seconds)));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+function parseBodyJson(bodyJson) {
+  if (bodyJson === null || bodyJson === undefined) return "No content.";
+  if (typeof bodyJson !== "string") {
+    if (bodyJson.markdown) return bodyJson.markdown;
+    if (Array.isArray(bodyJson)) {
+      return bodyJson
+        .map((item) => (typeof item === "string" ? item : JSON.stringify(item, null, 2)))
+        .join("\n\n");
+    }
+    return JSON.stringify(bodyJson, null, 2);
+  }
+  try {
+    const parsed = JSON.parse(bodyJson);
+    if (typeof parsed === "string") return parsed;
+    if (parsed.markdown) return parsed.markdown;
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((item) => (typeof item === "string" ? item : JSON.stringify(item, null, 2)))
+        .join("\n\n");
+    }
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return bodyJson;
+  }
+}
 
 export default function ResourceWorkspace() {
   const { projectId, mediaId } = useParams();
@@ -14,203 +76,617 @@ export default function ResourceWorkspace() {
 
   const [activeTab, setActiveTab] = useState("overview");
   const [media, setMedia] = useState(null);
+  const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [job, setJob] = useState(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const [progressInfo, setProgressInfo] = useState(null);
 
-  const fetchMedia = async () => {
-    try {
-      const data = await getMediaDetails(mediaId);
-      setMedia(data);
-      try {
-        const { getLatestJobForMedia } = await import("../../api/processing");
-        const latestJob = await getLatestJobForMedia(mediaId);
-        setJob(latestJob);
-        if (latestJob.status === "PENDING" || latestJob.status === "PROCESSING") {
-          setIsProcessing(true);
-          pollJobStatus(latestJob.job_id);
-        }
-      } catch (e) {
-        // No jobs or error fetching jobs
-      }
-    } catch (err) {
-      setError("Failed to load resource.");
-    }
-  };
+  const jobStatus = job?.status;
+  const jobId = job?.job_id;
+  const hasActiveJob = jobStatus === "PENDING" || jobStatus === "PROCESSING";
 
-  useEffect(() => {
-    fetchMedia().finally(() => setLoading(false));
+  const fetchMedia = useCallback(async () => {
+    const data = await getMediaDetails(mediaId);
+    setMedia(data);
   }, [mediaId]);
 
-  const handleStartProcessing = async () => {
-    try {
-      setIsProcessing(true);
-      const res = await startProcessing(mediaId);
-      setJob(res);
-      pollJobStatus(res.job_id);
-    } catch (err) {
-      setError("Failed to start processing: " + (err.message || err));
-      setIsProcessing(false);
-    }
-  };
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const [mediaData, jobData] = await Promise.all([
+          getMediaDetails(mediaId),
+          getLatestJobForMedia(mediaId).catch(() => null),
+        ]);
+        if (!active) return;
+        setMedia(mediaData);
+        setJob(jobData);
+        setError("");
+        setLoading(false);
+      } catch {
+        if (!active) return;
+        setError("Failed to load resource.");
+        setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      active = false;
+    };
+  }, [mediaId]);
 
-  const pollJobStatus = async (jobId) => {
+  // Poll job status while a processing job is active.
+  useEffect(() => {
+    if (jobStatus !== "PENDING" && jobStatus !== "PROCESSING") return undefined;
     const interval = setInterval(async () => {
       try {
         const j = await getProcessingJob(jobId);
         setJob(j);
         if (j.status === "COMPLETED" || j.status === "FAILED") {
-          clearInterval(interval);
-          setIsProcessing(false);
-          fetchMedia(); // Refresh media status
+          progressStream.disconnect();
+          fetchMedia().catch(() => {});
         }
-      } catch (err) {
-        clearInterval(interval);
-        setIsProcessing(false);
+      } catch {
+        // Transient polling failure; keep waiting for the next tick.
       }
-    }, 2000);
-  };
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [jobStatus, jobId, fetchMedia]);
 
-  if (loading) return <div style={{ padding: "40px", textAlign: "center" }}><Loader2 className="lucide-spin" /> Loading resource...</div>;
-  if (error) return <div style={{ padding: "40px", color: "red" }}><AlertCircle /> {error}</div>;
+  // Subscribe to the live progress stream while a job is active.
+  useEffect(() => {
+    if (jobStatus !== "PENDING" && jobStatus !== "PROCESSING") return undefined;
+    const listener = (msg) => {
+      if (msg && msg.type === "event" && msg.data && msg.data.event === "progress" && msg.data.payload) {
+        setProgressInfo(msg.data.payload);
+      }
+    };
+    progressStream.subscribe(listener);
+    progressStream.connect(mediaId);
+    return () => {
+      progressStream.unsubscribe(listener);
+    };
+  }, [jobStatus, mediaId]);
+
+  // Clean up the SSE connection on unmount.
+  useEffect(() => {
+    return () => {
+      progressStream.disconnect();
+    };
+  }, []);
+
+  const handleStartProcessing = useCallback(async () => {
+    setIsStarting(true);
+    setError("");
+    setProgressInfo(null);
+    try {
+      const res = await startProcessing(mediaId);
+      setJob(res);
+    } catch (err) {
+      setError("Failed to start processing: " + (err.message || "Unknown error"));
+    } finally {
+      setIsStarting(false);
+    }
+  }, [mediaId]);
+
+  const tabs = [
+    { id: "overview", label: "Overview", icon: PlayCircle },
+    { id: "transcript", label: "Transcript", icon: FileText },
+    { id: "clips", label: "Clips", icon: Film },
+    { id: "content", label: "AI Content", icon: Sparkles },
+  ];
+
+  const canProcess = (media?.status === "PENDING" || media?.status === "FAILED") && !hasActiveJob;
 
   return (
-    <div className="resource-workspace" style={{ padding: "20px", maxWidth: "1200px", margin: "0 auto", width: "100%" }}>
-      <header style={{ marginBottom: "20px", display: "flex", alignItems: "center", gap: "16px" }}>
-        <button onClick={() => navigate(`/projects/${projectId}`)} style={{ background: "none", border: "none", cursor: "pointer", color: "#4F46E5" }}>
-          <ArrowLeft />
+    <div className="resourceWorkspace">
+      <header className="resourceWorkspace__header">
+        <button className="resourceWorkspace__back" onClick={() => navigate(`/projects/${projectId}`)}>
+          <ArrowLeft size={16} /> Back
         </button>
-        <h1 style={{ fontSize: "24px", margin: 0 }}>{media?.filename || "Resource"}</h1>
+        <div className="resourceWorkspace__titleWrap">
+          <h1 className="resourceWorkspace__title">{media?.filename || "Resource Workspace"}</h1>
+          {media?.status && (
+            <span className={`statusBadge statusBadge--${String(media.status).toLowerCase()}`}>{media.status}</span>
+          )}
+        </div>
       </header>
 
-      <div style={{ display: "flex", gap: "10px", marginBottom: "20px", borderBottom: "1px solid #e2e8f0", paddingBottom: "10px" }}>
-        <button 
-          onClick={() => setActiveTab("overview")} 
-          style={{ padding: "8px 16px", background: activeTab === "overview" ? "#e0e7ff" : "none", border: "none", borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", fontWeight: activeTab === "overview" ? 600 : 400, color: activeTab === "overview" ? "#4F46E5" : "#64748b" }}
-        >
-          <PlayCircle size={16} /> Overview
-        </button>
-        <button 
-          onClick={() => setActiveTab("transcript")} 
-          style={{ padding: "8px 16px", background: activeTab === "transcript" ? "#e0e7ff" : "none", border: "none", borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", fontWeight: activeTab === "transcript" ? 600 : 400, color: activeTab === "transcript" ? "#4F46E5" : "#64748b" }}
-        >
-          <FileText size={16} /> Transcript
-        </button>
-        <button 
-          onClick={() => setActiveTab("clips")} 
-          style={{ padding: "8px 16px", background: activeTab === "clips" ? "#e0e7ff" : "none", border: "none", borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", fontWeight: activeTab === "clips" ? 600 : 400, color: activeTab === "clips" ? "#4F46E5" : "#64748b" }}
-        >
-          <Film size={16} /> Clips
-        </button>
-        <button 
-          onClick={() => setActiveTab("content")} 
-          style={{ padding: "8px 16px", background: activeTab === "content" ? "#e0e7ff" : "none", border: "none", borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", fontWeight: activeTab === "content" ? 600 : 400, color: activeTab === "content" ? "#4F46E5" : "#64748b" }}
-        >
-          <Sparkles size={16} /> AI Content
-        </button>
-      </div>
+      {loading ? (
+        <div className="stateBox">
+          <Loader2 className="lucide-spin" size={18} /> Loading resource…
+        </div>
+      ) : error ? (
+        <div className="stateBox stateBox--error">
+          <AlertCircle size={18} /> {error}
+        </div>
+      ) : (
+        <>
+          <nav className="resourceWorkspace__tabs">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  className={`resourceWorkspace__tab${activeTab === tab.id ? " resourceWorkspace__tab--active" : ""}`}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  <Icon size={16} /> {tab.label}
+                </button>
+              );
+            })}
+          </nav>
 
-      <section style={{ background: "white", borderRadius: "8px", padding: "20px", border: "1px solid #e2e8f0", minHeight: "500px" }}>
-        {activeTab === "overview" && (
-          <div>
-            <h2>Resource Overview</h2>
-            <div style={{ background: "#f8fafc", padding: "16px", borderRadius: "8px", marginBottom: "20px" }}>
-              <p><strong>Status:</strong> {media?.status}</p>
-              <p><strong>File Size:</strong> {(media?.file_size / (1024 * 1024)).toFixed(2)} MB</p>
-              {media?.duration && <p><strong>Duration:</strong> {media.duration}s</p>}
-            </div>
+          <section className="resourceWorkspace__content">
+            {activeTab === "overview" && (
+              <div className="overview">
+                <div className="overview__grid">
+                  <div className="card">
+                    <div className="card__header">
+                      <h3 className="card__title">Media Info</h3>
+                    </div>
+                    <dl className="mediaInfo">
+                      <div className="mediaInfo__row">
+                        <dt>Status</dt>
+                        <dd>
+                          <span
+                            className={`statusBadge statusBadge--${String(media?.status || "unknown").toLowerCase()}`}
+                          >
+                            {media?.status || "—"}
+                          </span>
+                        </dd>
+                      </div>
+                      <div className="mediaInfo__row">
+                        <dt>File Size</dt>
+                        <dd>{formatFileSize(media?.file_size)}</dd>
+                      </div>
+                      <div className="mediaInfo__row">
+                        <dt>Duration</dt>
+                        <dd>{formatDuration(media?.duration)}</dd>
+                      </div>
+                      <div className="mediaInfo__row">
+                        <dt>Codec</dt>
+                        <dd>{media?.codec || "—"}</dd>
+                      </div>
+                      <div className="mediaInfo__row">
+                        <dt>Resolution</dt>
+                        <dd>{media?.width && media?.height ? `${media.width} × ${media.height}` : "—"}</dd>
+                      </div>
+                      <div className="mediaInfo__row">
+                        <dt>Bitrate</dt>
+                        <dd>{media?.bitrate ? `${Math.round(media.bitrate / 1000)} kbps` : "—"}</dd>
+                      </div>
+                      <div className="mediaInfo__row">
+                        <dt>Frame Rate</dt>
+                        <dd>{media?.fps ? `${media.fps} fps` : "—"}</dd>
+                      </div>
+                    </dl>
+                  </div>
 
-            {(media?.status === "PENDING" || media?.status === "FAILED") && !isProcessing && (
-              <button 
-                onClick={handleStartProcessing} 
-                style={{ background: "#4F46E5", color: "white", padding: "10px 20px", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bold" }}
-              >
-                Start Processing
-              </button>
-            )}
+                  <div className="card">
+                    <div className="card__header">
+                      <h3 className="card__title">Preview</h3>
+                    </div>
+                    <MediaPreview media={media} />
+                  </div>
+                </div>
 
-            {isProcessing && (
-              <div style={{ padding: "20px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px" }}>
-                <p style={{ display: "flex", alignItems: "center", gap: "8px", color: "#166534", margin: 0 }}>
-                  <Loader2 className="lucide-spin" size={20} /> Processing... {job?.status}
-                </p>
+                <div className="card">
+                  <div className="card__header">
+                    <h3 className="card__title">Processing</h3>
+                  </div>
+                  <div className="processing">
+                    {hasActiveJob && (
+                      <div className="processing__active">
+                        <div className="processing__statusRow">
+                          <Loader2 className="lucide-spin" size={18} />
+                          <span>Processing resource…</span>
+                          {jobStatus && <span className="statusBadge statusBadge--processing">{jobStatus}</span>}
+                        </div>
+                        {typeof progressInfo?.progress === "number" && (
+                          <div className="processing__progress">
+                            <progress
+                              className="progressBar"
+                              max={100}
+                              value={Math.min(100, Math.max(0, progressInfo.progress))}
+                            >
+                              {Math.round(progressInfo.progress)}%
+                            </progress>
+                            <span className="processing__percent">{Math.round(progressInfo.progress)}%</span>
+                          </div>
+                        )}
+                        {progressInfo?.stage && <p className="processing__stage">Stage: {progressInfo.stage}</p>}
+                        {progressInfo?.message && <p className="processing__message">{progressInfo.message}</p>}
+                      </div>
+                    )}
+
+                    {jobStatus === "FAILED" && (
+                      <div className="processing__failed">
+                        <AlertCircle size={18} />
+                        <p className="processing__error">
+                          Processing failed: {job?.error_message || "Unknown error"}
+                        </p>
+                      </div>
+                    )}
+
+                    {jobStatus === "COMPLETED" && (
+                      <div className="processing__done">
+                        <CheckCircle2 size={18} />
+                        <span>Processing completed successfully.</span>
+                      </div>
+                    )}
+
+                    {canProcess && (
+                      <div className="processing__actions">
+                        <button className="btn btn--primary" onClick={handleStartProcessing} disabled={isStarting}>
+                          {isStarting ? (
+                            <>
+                              <Loader2 className="lucide-spin" size={16} /> Starting…
+                            </>
+                          ) : (
+                            <>
+                              <PlayCircle size={16} /> Start Processing
+                            </>
+                          )}
+                        </button>
+                        <p className="processing__hint">
+                          Run the processing pipeline to prepare this resource for transcription, clip selection, and
+                          content generation.
+                        </p>
+                      </div>
+                    )}
+
+                    {!hasActiveJob &&
+                      jobStatus !== "FAILED" &&
+                      jobStatus !== "COMPLETED" &&
+                      media?.status !== "PENDING" &&
+                      media?.status !== "FAILED" && (
+                        <p className="processing__idle">No active processing job for this resource.</p>
+                      )}
+                  </div>
+                </div>
               </div>
             )}
-            
-            {job?.status === "FAILED" && (
-              <div style={{ padding: "20px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", marginTop: "10px" }}>
-                <p style={{ color: "#991b1b", margin: 0 }}>Processing failed: {job.error_message}</p>
-              </div>
-            )}
-          </div>
-        )}
 
-        {activeTab === "transcript" && (
-          <div>
-            <h2>Transcript</h2>
-            <TranscriptView mediaId={mediaId} />
-          </div>
-        )}
-
-        {activeTab === "clips" && (
-          <div>
-            <h2>Generated Clips</h2>
-            <ClipsView projectId={projectId} mediaId={mediaId} />
-          </div>
-        )}
-
-        {activeTab === "content" && (
-          <div>
-            <h2>AI Content</h2>
-            <p>Content generation integration coming soon...</p>
-          </div>
-        )}
-      </section>
+            {activeTab === "transcript" && <TranscriptView mediaId={mediaId} />}
+            {activeTab === "clips" && <ClipsView projectId={projectId} mediaId={mediaId} />}
+            {activeTab === "content" && <ContentView mediaId={mediaId} />}
+          </section>
+        </>
+      )}
     </div>
   );
 }
 
+function MediaPreview({ media }) {
+  const [url, setUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const isVideo = VIDEO_EXT_RE.test(media?.filename || "");
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl = null;
+
+    const token = localStorage.getItem("token");
+    fetch(`${config.apiUrl}/projects/media/${media.id}/stream`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Stream unavailable");
+        return res.blob();
+      })
+      .then((blob) => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(blob);
+        setUrl(objectUrl);
+        setLoading(false);
+        setError("");
+      })
+      .catch(() => {
+        if (!active) return;
+        setError("Unable to load media preview.");
+        setLoading(false);
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [media.id, media.filename]);
+
+  if (loading) {
+    return (
+      <div className="mediaPreview mediaPreview--video">
+        <div className="mediaPreview__loading">
+          <Loader2 className="lucide-spin" size={18} /> Loading preview…
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mediaPreview mediaPreview--video">
+        <div className="mediaPreview__error">{error}</div>
+      </div>
+    );
+  }
+
+  if (!url) return null;
+
+  return isVideo ? (
+    <div className="mediaPreview mediaPreview--video">
+      <video className="mediaPreview__video" src={url} controls playsInline />
+    </div>
+  ) : (
+    <div className="mediaPreview mediaPreview--audio">
+      <audio className="mediaPreview__audio" src={url} controls />
+    </div>
+  );
+}
+
+function TranscriptView({ mediaId }) {
+  const [transcript, setTranscript] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [editingSegmentId, setEditingSegmentId] = useState(null);
+  const [segmentDraft, setSegmentDraft] = useState("");
+  const [savingSegmentId, setSavingSegmentId] = useState(null);
+
+  const loadTranscript = useCallback(async () => {
+    try {
+      const data = await getMediaTranscript(mediaId);
+      setTranscript(data);
+      setError("");
+    } catch (err) {
+      if (err.status === 404) {
+        setTranscript(null);
+        setError("");
+      } else {
+        setError("Failed to load transcript.");
+      }
+    }
+  }, [mediaId]);
+
+  useEffect(() => {
+    let active = true;
+    Promise.resolve()
+      .then(() => loadTranscript())
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [loadTranscript]);
+
+  const handleTranscribe = async () => {
+    setIsTranscribing(true);
+    setError("");
+    try {
+      await transcribeMedia(mediaId);
+      await loadTranscript();
+    } catch (err) {
+      setError("Transcription failed: " + (err.message || "Unknown error"));
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  const startEditingSegment = (seg) => {
+    setEditingSegmentId(seg.id);
+    setSegmentDraft(seg.text || "");
+  };
+
+  const cancelEditingSegment = () => {
+    setEditingSegmentId(null);
+    setSegmentDraft("");
+  };
+
+  const saveSegment = async (seg) => {
+    setSavingSegmentId(seg.id);
+    setError("");
+    try {
+      await api.put(`/transcripts/segments/${seg.id}`, { text: segmentDraft });
+      setTranscript((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          segments: (prev.segments || []).map((s) => (s.id === seg.id ? { ...s, text: segmentDraft } : s)),
+        };
+      });
+      setEditingSegmentId(null);
+      setSegmentDraft("");
+    } catch (err) {
+      setError("Failed to save segment: " + (err.message || "Unknown error"));
+    } finally {
+      setSavingSegmentId(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="stateBox">
+        <Loader2 className="lucide-spin" size={18} /> Loading transcript…
+      </div>
+    );
+  }
+
+  if (error && !transcript) {
+    return (
+      <div className="stateBox stateBox--error">
+        <AlertCircle size={18} /> {error}
+      </div>
+    );
+  }
+
+  if (!transcript) {
+    return (
+      <div className="emptyState">
+        <div className="emptyState__icon">
+          <FileText size={36} color="#4F46E5" />
+        </div>
+        <h3 className="emptyState__title">No transcript yet</h3>
+        <p className="emptyState__text">
+          Generate a transcript to unlock the full text, a summary, and editable segments.
+        </p>
+        <button className="btn btn--primary" onClick={handleTranscribe} disabled={isTranscribing}>
+          {isTranscribing ? (
+            <>
+              <Loader2 className="lucide-spin" size={16} /> Transcribing…
+            </>
+          ) : (
+            <>
+              <Sparkles size={16} /> Generate Transcript
+            </>
+          )}
+        </button>
+      </div>
+    );
+  }
+
+  const segments = Array.isArray(transcript.segments) ? transcript.segments : [];
+
+  return (
+    <div className="transcript">
+      {error && (
+        <div className="inlineError">
+          <AlertCircle size={15} /> {error}
+        </div>
+      )}
+
+      {(transcript.summary || transcript.language) && (
+        <div className="transcript__summary">
+          {transcript.language && <p className="transcript__language">Language: {transcript.language}</p>}
+          <h3 className="transcript__summaryTitle">Summary</h3>
+          <p className="transcript__summaryText">{transcript.summary || "No summary available."}</p>
+        </div>
+      )}
+
+      {segments.length === 0 ? (
+        <div className="stateBox">No transcript segments available.</div>
+      ) : (
+        <div className="transcript__list">
+          {segments.map((seg) => (
+            <div key={seg.id} className={`segment${editingSegmentId === seg.id ? " segment--editing" : ""}`}>
+              <div className="segment__header">
+                <div className="segment__meta">
+                  <span className="segment__time">
+                    <Clock size={12} /> {formatDuration(seg.start_time)} – {formatDuration(seg.end_time)}
+                  </span>
+                  {seg.speaker_label && <span className="segment__speaker">{seg.speaker_label}</span>}
+                  {seg.chapter_title && <span className="segment__chapter">{seg.chapter_title}</span>}
+                </div>
+                {editingSegmentId === seg.id ? (
+                  <button className="btn btn--ghost btn--sm" onClick={cancelEditingSegment}>
+                    <X size={13} /> Cancel
+                  </button>
+                ) : (
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    onClick={() => startEditingSegment(seg)}
+                    aria-label="Edit segment"
+                  >
+                    <Pencil size={13} /> Edit
+                  </button>
+                )}
+              </div>
+
+              {editingSegmentId === seg.id ? (
+                <div className="segment__editor">
+                  <textarea
+                    className="segment__textarea"
+                    value={segmentDraft}
+                    onChange={(e) => setSegmentDraft(e.target.value)}
+                    rows={Math.max(3, Math.min(12, Math.ceil((segmentDraft.length || 1) / 90)))}
+                    autoFocus
+                  />
+                  <div className="segment__editorActions">
+                    <button
+                      className="btn btn--primary btn--sm"
+                      onClick={() => saveSegment(seg)}
+                      disabled={savingSegmentId === seg.id}
+                    >
+                      {savingSegmentId === seg.id ? (
+                        <>
+                          <Loader2 className="lucide-spin" size={13} /> Saving…
+                        </>
+                      ) : (
+                        <>
+                          <Check size={13} /> Save
+                        </>
+                      )}
+                    </button>
+                    <button className="btn btn--ghost btn--sm" onClick={cancelEditingSegment}>
+                      <X size={13} /> Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p
+                  className="segment__text"
+                  role="button"
+                  tabIndex={0}
+                  title="Click to edit"
+                  onClick={() => startEditingSegment(seg)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      startEditingSegment(seg);
+                    }
+                  }}
+                >
+                  {seg.text}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ClipVideo({ clip }) {
   const [videoUrl, setVideoUrl] = useState(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    let active = true;
     let objectUrl = null;
-    let isActive = true;
 
     getClipStreamUrl(clip.id)
-      .then(url => {
-        if (isActive) {
-          objectUrl = url;
-          setVideoUrl(url);
-        } else {
+      .then((url) => {
+        if (!active) {
           URL.revokeObjectURL(url);
+          return;
         }
+        objectUrl = url;
+        setVideoUrl(url);
       })
-      .catch(err => {
-        if (isActive) setError(true);
+      .catch(() => {
+        if (active) setError(true);
       });
 
     return () => {
-      isActive = false;
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [clip.id]);
 
-  if (error) return <div style={{ color: "red", padding: "20px" }}>Failed to load video stream.</div>;
-  if (!videoUrl) return <div style={{ color: "white", padding: "20px", display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}><Loader2 className="lucide-spin" /> Loading...</div>;
-
-  return (
-    <video 
-      controls 
-      src={videoUrl} 
-      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-    />
-  );
+  if (error) return <div className="clipVideo__error">Failed to load video stream.</div>;
+  if (!videoUrl) {
+    return (
+      <div className="clipVideo__loading">
+        <Loader2 className="lucide-spin" size={18} /> Loading…
+      </div>
+    );
+  }
+  return <video className="clipVideo__video" src={videoUrl} controls playsInline />;
 }
 
 function ClipsView({ projectId, mediaId }) {
@@ -219,43 +695,67 @@ function ClipsView({ projectId, mediaId }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let active = true;
     getProjectClips(projectId)
       .then((data) => {
-        const mediaClips = data.filter(c => String(c.media_id) === String(mediaId));
-        setClips(mediaClips);
+        if (!active) return;
+        const arr = Array.isArray(data) ? data : [];
+        setClips(arr.filter((c) => String(c.media_id) === String(mediaId)));
+        setLoading(false);
       })
-      .catch(err => setError("Failed to load clips."))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (!active) return;
+        setError("Failed to load clips.");
+        setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [projectId, mediaId]);
 
-  if (loading) return <div><Loader2 className="lucide-spin" /> Loading clips...</div>;
-  if (error) return <div style={{color: "red"}}>{error}</div>;
+  if (loading) {
+    return (
+      <div className="stateBox">
+        <Loader2 className="lucide-spin" size={18} /> Loading clips…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="stateBox stateBox--error">
+        <AlertCircle size={18} /> {error}
+      </div>
+    );
+  }
 
   if (clips.length === 0) {
     return (
-      <div style={{ padding: "40px", textAlign: "center", background: "#f8fafc", borderRadius: "8px", border: "2px dashed #cbd5e1" }}>
-        <Film size={48} color="#94a3b8" style={{ margin: "0 auto 10px" }} />
-        <h3 style={{ margin: "0 0 10px" }}>No clips available</h3>
-        <p style={{ margin: 0, color: "#64748b" }}>Process this resource to generate AI clips.</p>
+      <div className="emptyState">
+        <div className="emptyState__icon">
+          <Film size={36} color="#4F46E5" />
+        </div>
+        <h3 className="emptyState__title">No clips yet</h3>
+        <p className="emptyState__text">Clips generated from this resource will appear here.</p>
       </div>
     );
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {clips.map(clip => (
-        <div key={clip.id} style={{ display: "flex", gap: "20px", background: "#f8fafc", padding: "16px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-          <div style={{ flex: "0 0 300px", background: "black", borderRadius: "6px", overflow: "hidden", aspectRatio: "16/9" }}>
+    <div className="clips">
+      {clips.map((clip) => (
+        <div key={clip.id} className="clip">
+          <div className="clip__video">
             <ClipVideo clip={clip} />
           </div>
-          <div>
-            <h3 style={{ margin: "0 0 10px", fontSize: "18px" }}>{clip.title}</h3>
-            <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
-              <span style={{ background: "#e0e7ff", color: "#4F46E5", padding: "4px 8px", borderRadius: "4px", fontSize: "12px", fontWeight: "bold" }}>
-                {clip.start_time.toFixed(1)}s - {clip.end_time.toFixed(1)}s
+          <div className="clip__body">
+            <h4 className="clip__title">{clip.title}</h4>
+            <div className="clip__meta">
+              <span className="clip__time">
+                <Clock size={12} /> {formatDuration(clip.start_time)} – {formatDuration(clip.end_time)}
               </span>
             </div>
-            <p style={{ margin: 0, fontSize: "14px", color: "#334155", lineHeight: "1.5" }}>{clip.reason}</p>
+            {clip.reason && <p className="clip__reason">{clip.reason}</p>}
           </div>
         </div>
       ))}
@@ -263,126 +763,52 @@ function ClipsView({ projectId, mediaId }) {
   );
 }
 
-import { getMediaTranscript, transcribeMedia } from "../../api/media";
-
-function TranscriptView({ mediaId }) {
-  const [transcript, setTranscript] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const [error, setError] = useState("");
-
-  const fetchTranscript = async () => {
-    try {
-      const data = await getMediaTranscript(mediaId);
-      setTranscript(data);
-    } catch (err) {
-      if (err.message && err.message.includes("404")) {
-        // Not generated yet
-      } else {
-        setError("Failed to load transcript.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchTranscript();
-  }, [mediaId]);
-
-  const handleTranscribe = async () => {
-    setIsTranscribing(true);
-    setError("");
-    try {
-      const data = await transcribeMedia(mediaId);
-      setTranscript(data);
-    } catch (err) {
-      setError("Transcription failed: " + (err.message || "Unknown error"));
-    } finally {
-      setIsTranscribing(false);
-    }
-  };
-
-  if (loading) return <div><Loader2 className="lucide-spin" /> Loading transcript...</div>;
-
-  if (error) return <div style={{ color: "red", padding: "10px", background: "#fef2f2", borderRadius: "8px", border: "1px solid #fecaca" }}>{error}</div>;
-
-  if (!transcript) {
-    return (
-      <div style={{ padding: "40px", textAlign: "center", background: "#f8fafc", borderRadius: "8px", border: "2px dashed #cbd5e1" }}>
-        <FileText size={48} color="#94a3b8" style={{ margin: "0 auto 10px" }} />
-        <h3 style={{ margin: "0 0 10px" }}>No transcript available</h3>
-        <p style={{ margin: "0 0 20px", color: "#64748b" }}>Run transcription to generate the text content.</p>
-        <button 
-          onClick={handleTranscribe} 
-          disabled={isTranscribing}
-          style={{ background: "#4F46E5", color: "white", padding: "10px 20px", border: "none", borderRadius: "8px", cursor: isTranscribing ? "not-allowed" : "pointer", fontWeight: "bold", display: "inline-flex", alignItems: "center", gap: "8px" }}
-        >
-          {isTranscribing ? <Loader2 size={16} className="lucide-spin" /> : <Sparkles size={16} />}
-          {isTranscribing ? "Transcribing..." : "Generate Transcript"}
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ background: "#f8fafc", padding: "20px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-      <div style={{ marginBottom: "20px", paddingBottom: "20px", borderBottom: "1px solid #cbd5e1" }}>
-        <h3 style={{ margin: "0 0 10px" }}>Summary</h3>
-        <p style={{ margin: 0, color: "#334155", lineHeight: "1.6" }}>{transcript.summary || "No summary available."}</p>
-      </div>
-      <div>
-        <h3 style={{ margin: "0 0 10px" }}>Full Text</h3>
-        <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "400px", overflowY: "auto", paddingRight: "10px" }}>
-          {(transcript.segments || []).map(seg => (
-            <div key={seg.id} style={{ padding: "10px", background: "white", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-              <div style={{ fontSize: "12px", color: "#64748b", marginBottom: "4px", fontWeight: "bold" }}>
-                {seg.start_time.toFixed(1)}s - {seg.end_time.toFixed(1)}s
-              </div>
-              <div style={{ color: "#0f172a", lineHeight: "1.5" }}>{seg.text}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-
 function ContentView({ mediaId }) {
   const [pack, setPack] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
   const [editingContent, setEditingContent] = useState(null);
   const [editBody, setEditBody] = useState("");
+  const [savingContent, setSavingContent] = useState(false);
 
-  const fetchPack = async () => {
+  const loadPack = useCallback(async () => {
     try {
       const data = await getCampaignPack(mediaId);
       setPack(data);
+      setError("");
     } catch (err) {
-      if (err.message && err.message.includes("404")) {
-        // Not generated yet
+      if (err.status === 404) {
+        setPack(null);
+        setError("");
       } else {
         setError("Failed to load content.");
       }
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [mediaId]);
 
   useEffect(() => {
-    fetchPack();
-  }, [mediaId]);
+    let active = true;
+    Promise.resolve()
+      .then(() => loadPack())
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [loadPack]);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
     setError("");
     try {
       const data = await generateCampaignPack(mediaId);
-      setPack(data);
+      if (data && Array.isArray(data.assets)) {
+        setPack(data);
+      } else {
+        await loadPack();
+      }
     } catch (err) {
       setError("Content generation failed: " + (err.message || "Unknown error"));
     } finally {
@@ -390,15 +816,28 @@ function ContentView({ mediaId }) {
     }
   };
 
-  const handleSaveEdit = async () => {
-    if (!editingContent) return;
+  const startEdit = (asset) => {
+    setEditingContent(asset);
+    setEditBody(typeof asset.body_json === "string" ? asset.body_json : JSON.stringify(asset.body_json, null, 2));
+  };
+
+  const cancelEdit = () => {
+    setEditingContent(null);
+    setEditBody("");
+  };
+
+  const handleSaveEdit = async (asset) => {
+    setSavingContent(true);
+    setError("");
     try {
-      // The backend expects a string for body_json
-      await updateGeneratedContent(editingContent.id, { body_json: editBody });
-      fetchPack();
+      await updateGeneratedContent(asset.id, { body_json: editBody });
+      await loadPack();
       setEditingContent(null);
+      setEditBody("");
     } catch (err) {
-      alert("Failed to save edits: " + err.message);
+      setError("Failed to save content: " + (err.message || "Unknown error"));
+    } finally {
+      setSavingContent(false);
     }
   };
 
@@ -406,7 +845,7 @@ function ContentView({ mediaId }) {
     try {
       await exportContentAsset(contentId, "markdown");
     } catch (err) {
-      alert("Failed to export asset: " + err.message);
+      setError("Failed to export asset: " + (err.message || "Unknown error"));
     }
   };
 
@@ -414,104 +853,134 @@ function ContentView({ mediaId }) {
     try {
       await exportCampaignPack(mediaId);
     } catch (err) {
-      alert("Failed to export campaign pack: " + err.message);
+      setError("Failed to export campaign pack: " + (err.message || "Unknown error"));
     }
   };
 
-  if (loading) return <div><Loader2 className="lucide-spin" /> Loading AI content...</div>;
+  if (loading) {
+    return (
+      <div className="stateBox">
+        <Loader2 className="lucide-spin" size={18} /> Loading AI content…
+      </div>
+    );
+  }
 
-  if (error) return <div style={{ color: "red", padding: "10px", background: "#fef2f2", borderRadius: "8px", border: "1px solid #fecaca" }}>{error}</div>;
+  if (error && !pack) {
+    return (
+      <div className="stateBox stateBox--error">
+        <AlertCircle size={18} /> {error}
+      </div>
+    );
+  }
 
   if (!pack) {
     return (
-      <div style={{ padding: "40px", textAlign: "center", background: "#f8fafc", borderRadius: "8px", border: "2px dashed #cbd5e1" }}>
-        <Sparkles size={48} color="#94a3b8" style={{ margin: "0 auto 10px" }} />
-        <h3 style={{ margin: "0 0 10px" }}>No AI Content available</h3>
-        <p style={{ margin: "0 0 20px", color: "#64748b" }}>Generate a campaign pack based on your video transcript.</p>
-        <button 
-          onClick={handleGenerate} 
-          disabled={isGenerating}
-          style={{ background: "#4F46E5", color: "white", padding: "10px 20px", border: "none", borderRadius: "8px", cursor: isGenerating ? "not-allowed" : "pointer", fontWeight: "bold", display: "inline-flex", alignItems: "center", gap: "8px" }}
-        >
-          {isGenerating ? <Loader2 size={16} className="lucide-spin" /> : <Sparkles size={16} />}
-          {isGenerating ? "Generating Content..." : "Generate Campaign Pack"}
+      <div className="emptyState">
+        <div className="emptyState__icon">
+          <Sparkles size={36} color="#4F46E5" />
+        </div>
+        <h3 className="emptyState__title">No AI content yet</h3>
+        <p className="emptyState__text">
+          Generate a campaign pack to turn this resource into ready-to-publish social content.
+        </p>
+        <button className="btn btn--primary" onClick={handleGenerate} disabled={isGenerating}>
+          {isGenerating ? (
+            <>
+              <Loader2 className="lucide-spin" size={16} /> Generating…
+            </>
+          ) : (
+            <>
+              <Sparkles size={16} /> Generate Content
+            </>
+          )}
         </button>
       </div>
     );
   }
 
-  if (editingContent) {
-    return (
-      <div style={{ background: "white", padding: "20px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-        <h3 style={{ margin: "0 0 16px" }}>Editing: {editingContent.title}</h3>
-        <textarea
-          value={editBody}
-          onChange={(e) => setEditBody(e.target.value)}
-          style={{ width: "100%", height: "400px", padding: "12px", border: "1px solid #cbd5e1", borderRadius: "6px", fontFamily: "monospace", fontSize: "14px", resize: "vertical", marginBottom: "16px" }}
-        />
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button onClick={handleSaveEdit} style={{ background: "#4F46E5", color: "white", padding: "8px 16px", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }}>Save Changes</button>
-          <button onClick={() => setEditingContent(null)} style={{ background: "#f1f5f9", color: "#334155", padding: "8px 16px", border: "1px solid #cbd5e1", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }}>Cancel</button>
-        </div>
-      </div>
-    );
-  }
+  const assets = Array.isArray(pack.assets) ? pack.assets : [];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-        <h3 style={{ margin: 0 }}>Campaign Pack ({pack.count} Assets)</h3>
-        <button 
-          onClick={handleExportAll}
-          style={{ background: "#10b981", color: "white", padding: "8px 16px", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", display: "flex", alignItems: "center", gap: "6px" }}
-        >
+    <div className="contentView">
+      {error && (
+        <div className="inlineError">
+          <AlertCircle size={15} /> {error}
+        </div>
+      )}
+
+      <div className="contentHeader">
+        <h3 className="contentHeader__title">
+          Campaign Pack
+          <span className="contentHeader__count">{pack.count || assets.length} Assets</span>
+        </h3>
+        <button className="btn btn--success" onClick={handleExportAll}>
           <Download size={16} /> Export All (ZIP)
         </button>
       </div>
-      {pack.assets.map(asset => {
-        // Attempt to parse JSON to display a structured preview, fallback to raw string
-        let displayContent = asset.body_json || "No content.";
-        try {
-          const parsed = JSON.parse(asset.body_json);
-          // If it's a markdown payload
-          if (parsed.markdown) displayContent = parsed.markdown;
-          // If it's a list (like tweets)
-          else if (Array.isArray(parsed)) displayContent = parsed.map(item => typeof item === "string" ? item : JSON.stringify(item, null, 2)).join("\n\n");
-          // If it's an object
-          else displayContent = JSON.stringify(parsed, null, 2);
-        } catch(e) {}
 
-        return (
-          <div key={asset.id} style={{ background: "#f8fafc", padding: "20px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px", borderBottom: "1px solid #cbd5e1", paddingBottom: "12px" }}>
-              <div>
-                <h3 style={{ margin: "0 0 4px", fontSize: "18px" }}>{asset.title}</h3>
-                <span style={{ background: "#e0e7ff", color: "#4F46E5", padding: "2px 8px", borderRadius: "4px", fontSize: "12px", fontWeight: "bold", display: "inline-block" }}>{asset.content_type}</span>
+      {assets.length === 0 ? (
+        <div className="stateBox">No assets in this pack yet.</div>
+      ) : (
+        <div className="contentList">
+          {assets.map((asset) => (
+            <div key={asset.id} className="contentAsset">
+              <div className="contentAsset__header">
+                <div className="contentAsset__heading">
+                  <h4 className="contentAsset__title">{asset.title}</h4>
+                  {asset.content_type && <span className="contentTypeBadge">{asset.content_type}</span>}
+                </div>
+                <div className="contentAsset__actions">
+                  <button className="btn btn--outline btn--sm" onClick={() => handleExportSingle(asset.id)}>
+                    <Download size={13} /> Download
+                  </button>
+                  {editingContent?.id === asset.id ? (
+                    <button className="btn btn--ghost btn--sm" onClick={cancelEdit}>
+                      <X size={13} /> Cancel
+                    </button>
+                  ) : (
+                    <button className="btn btn--outline btn--sm" onClick={() => startEdit(asset)}>
+                      <Pencil size={13} /> Edit
+                    </button>
+                  )}
+                </div>
               </div>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button 
-                  onClick={() => handleExportSingle(asset.id)}
-                  style={{ background: "white", color: "#334155", border: "1px solid #cbd5e1", padding: "6px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "13px", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}
-                >
-                  <Download size={14} /> Download
-                </button>
-                <button 
-                  onClick={() => {
-                    setEditingContent(asset);
-                    setEditBody(asset.body_json || "");
-                  }}
-                  style={{ background: "white", border: "1px solid #cbd5e1", padding: "6px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "13px", fontWeight: "600" }}
-                >
-                  Edit
-                </button>
-              </div>
+
+              {editingContent?.id === asset.id ? (
+                <div className="contentAsset__editor">
+                  <textarea
+                    className="contentAsset__textarea"
+                    value={editBody}
+                    onChange={(e) => setEditBody(e.target.value)}
+                    rows={12}
+                  />
+                  <div className="contentAsset__editorActions">
+                    <button
+                      className="btn btn--primary btn--sm"
+                      onClick={() => handleSaveEdit(asset)}
+                      disabled={savingContent}
+                    >
+                      {savingContent ? (
+                        <>
+                          <Loader2 className="lucide-spin" size={13} /> Saving…
+                        </>
+                      ) : (
+                        <>
+                          <Check size={13} /> Save Changes
+                        </>
+                      )}
+                    </button>
+                    <button className="btn btn--ghost btn--sm" onClick={cancelEdit}>
+                      <X size={13} /> Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="contentAsset__body">{parseBodyJson(asset.body_json)}</div>
+              )}
             </div>
-            <div style={{ color: "#334155", lineHeight: "1.6", whiteSpace: "pre-wrap", fontFamily: "monospace", fontSize: "13px", background: "white", padding: "12px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-              {displayContent}
-            </div>
-          </div>
-        );
-      })}
+          ))}
+        </div>
+      )}
     </div>
   );
 }

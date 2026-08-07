@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "./Login.css";
 import "./Register.css";
 import { registerUser } from "../../api/auth";
-import { Sparkles, ArrowRight, Lock, Mail, User, AlertCircle, CheckCircle2 } from "lucide-react";
+import { ArrowRight, Lock, Mail, User, AlertCircle } from "lucide-react";
 
 function Register() {
   const navigate = useNavigate();
@@ -12,7 +12,6 @@ function Register() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -45,21 +44,14 @@ function Register() {
         </Link>
 
         <div className="authCard__header">
-          <h3>Create Your Creator Account</h3>
-          <p>Join 2,000+ executives using Voice DNA & Brand Memory</p>
+          <h3>Create Your Free Account</h3>
+          <p>Start repurposing long-form content today.</p>
         </div>
 
         {error && (
           <div className="authCard__alert authCard__alert--error">
             <AlertCircle size={16} />
             <span>{error}</span>
-          </div>
-        )}
-
-        {success && (
-          <div className="authCard__alert authCard__alert--success">
-            <CheckCircle2 size={16} />
-            <span>Account Created! Redirecting to OS workspace...</span>
           </div>
         )}
 
@@ -70,7 +62,7 @@ function Register() {
               <User size={16} className="authCard__inputIcon" />
               <input
                 type="text"
-                placeholder="Sarah Jenkins"
+                placeholder="Your name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -79,12 +71,12 @@ function Register() {
           </div>
 
           <div className="authCard__inputGroup">
-            <label>Work Email</label>
+            <label>Email</label>
             <div className="authCard__inputWrapper">
               <Mail size={16} className="authCard__inputIcon" />
               <input
                 type="email"
-                placeholder="founder@company.com"
+                placeholder="you@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -107,7 +99,7 @@ function Register() {
           </div>
 
           <button type="submit" className="authCard__submitBtn" disabled={loading}>
-            <span>{loading ? "Creating Account..." : "Create Account & Start Free"}</span>
+            <span>{loading ? "Creating Account..." : "Create Account"}</span>
             <ArrowRight size={16} />
           </button>
         </form>

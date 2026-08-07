@@ -50,7 +50,7 @@ class Settings(BaseSettings):
 
     RATE_LIMIT_ANONYMOUS: int = 30  # req/min
     RATE_LIMIT_AUTHENTICATED: int = 120  # req/min
-    RATE_LIMIT_AUTH: int = 5  # req/min
+    RATE_LIMIT_AUTH: int = 20  # req/min
     RATE_LIMIT_UPLOAD: int = 10  # req/min
     RATE_LIMIT_AI: int = 20  # req/min
 

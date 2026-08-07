@@ -192,6 +192,42 @@
   background: #4338CA;
 }
 
+.authCard__submitBtn--ghost {
+  background: #F1F5F9;
+  color: #334155;
+}
+
+.authCard__submitBtn--ghost:hover {
+  background: #E2E8F0;
+}
+
+.authCard__row {
+  display: flex;
+  gap: 8px;
+}
+
+.authCard__row .authCard__submitBtn { flex: 1; }
+
+.authCard__forgotRow {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.authCard__forgotBtn {
+  background: none;
+  border: none;
+  color: #4F46E5;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.authCard__forgotBtn:hover {
+  background: #EEF2FF;
+}
+
 .authCard__footer {
   display: flex;
   flex-direction: column;

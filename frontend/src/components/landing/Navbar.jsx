@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import "./Navbar.css";
-import { MoreHorizontal, LayoutDashboard, LogIn, User, LogOut, ChevronDown } from "lucide-react";
+import { LayoutDashboard, LogIn, LogOut, ChevronDown } from "lucide-react";
 import { isAuthenticated, getUserProfile, logoutUser } from "../../api/auth";
 
-function Navbar({ onToggleDrawer }) {
+function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [authed, setAuthed] = useState(false);
@@ -12,13 +12,11 @@ function Navbar({ onToggleDrawer }) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   useEffect(() => {
-    const isUserAuthed = isAuthenticated();
-    setAuthed(isUserAuthed);
-    if (isUserAuthed) {
-      setUserProfile(getUserProfile());
-    } else {
-      setUserProfile(null);
-    }
+    Promise.resolve().then(() => {
+      const isUserAuthed = isAuthenticated();
+      setAuthed(isUserAuthed);
+      setUserProfile(isUserAuthed ? getUserProfile() : null);
+    });
   }, [location.pathname]);
 
   const handleLogout = () => {
@@ -32,16 +30,14 @@ function Navbar({ onToggleDrawer }) {
   const handleNavClick = (e, targetId) => {
     e.preventDefault();
     if (location.pathname !== "/") {
-      navigate(`/#${targetId}`);
+      navigate("/");
       setTimeout(() => {
         const elem = document.getElementById(targetId);
         if (elem) elem.scrollIntoView({ behavior: "smooth" });
       }, 100);
     } else {
       const elem = document.getElementById(targetId);
-      if (elem) {
-        elem.scrollIntoView({ behavior: "smooth" });
-      }
+      if (elem) elem.scrollIntoView({ behavior: "smooth" });
     }
   };
 
@@ -62,7 +58,7 @@ function Navbar({ onToggleDrawer }) {
             Pipeline
           </a>
           <a href="#comparison" onClick={(e) => handleNavClick(e, "comparison")} className="navbar__link">
-            Voice DNA
+            Why Scriptloom
           </a>
           <a href="#pricing" onClick={(e) => handleNavClick(e, "pricing")} className="navbar__link">
             Pricing
@@ -75,7 +71,7 @@ function Navbar({ onToggleDrawer }) {
             <>
               <Link to="/dashboard" className="navbar__dashboardBtn">
                 <LayoutDashboard size={15} />
-                <span>Go to OS Workspace</span>
+                <span>Go to Dashboard</span>
               </Link>
 
               {/* User Dropdown */}
@@ -101,7 +97,7 @@ function Navbar({ onToggleDrawer }) {
                     </div>
                     <div className="navbar__dropdownDivider" />
                     <button onClick={() => { setIsDropdownOpen(false); navigate("/dashboard"); }}>
-                      <LayoutDashboard size={15} /> OS Workspace
+                      <LayoutDashboard size={15} /> Dashboard
                     </button>
                     <button className="navbar__logoutBtn" onClick={handleLogout}>
                       <LogOut size={15} /> Sign Out
@@ -122,15 +118,6 @@ function Navbar({ onToggleDrawer }) {
               </Link>
             </>
           )}
-
-          <button
-            className="navbar__menuTrigger"
-            onClick={() => navigate(authed ? "/dashboard" : "/login")}
-            title="Open OS Workspace"
-            aria-label="Open OS Workspace"
-          >
-            <MoreHorizontal size={20} />
-          </button>
         </div>
       </div>
     </header>

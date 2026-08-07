@@ -1,4 +1,3 @@
-import { api } from "./client";
 import { config } from "../config";
 
 export async function exportContentAsset(contentId, format = "markdown") {
