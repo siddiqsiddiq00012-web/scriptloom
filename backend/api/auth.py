@@ -1,6 +1,10 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from google.oauth2 import id_token
+from google.auth.transport import requests
 
+from backend.core.config import settings
 from backend.core.dependencies import get_current_user
 from backend.db.dependencies import get_db
 from backend.models.user import User
@@ -10,8 +14,11 @@ from backend.schemas.auth import (
     UserLogin,
     UserRegister,
     UserResponse,
+    GoogleAuthRequest,
 )
 from backend.services.auth_service import AuthService
+
+logger = logging.getLogger("scriptloom.auth")
 
 router = APIRouter(
     prefix="/auth",
@@ -95,29 +102,85 @@ def forgot_password(
     }
 
 
-from pydantic import BaseModel
-
-class GoogleAuthSchema(BaseModel):
-    email: str
-    name: str = "Google User"
-    avatar_url: str | None = None
-
-
 @router.post(
     "/google",
     response_model=TokenResponse,
 )
 def google_auth(
-    payload: GoogleAuthSchema,
+    payload: GoogleAuthRequest,
     db: Session = Depends(get_db),
 ):
-    user, token = AuthService(db).google_login(
-        email=payload.email,
-        name=payload.name,
-        avatar_url=payload.avatar_url,
+    # 1. Ensure GOOGLE_CLIENT_ID is configured on the server
+    if not settings.GOOGLE_CLIENT_ID:
+        logger.error("GOOGLE_CLIENT_ID is not configured in settings.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google OAuth configuration is missing on the server.",
+        )
+
+    # 2. Extract token from payload
+    try:
+        token = payload.get_token
+    except ValueError as e:
+        logger.warning(f"Google auth request missing token: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google ID Token is required.",
+        )
+
+    # 3. Verify the Google ID token
+    try:
+        # id_token.verify_oauth2_token verifies signature, audience, and expiration.
+        id_info = id_token.verify_oauth2_token(
+            token,
+            requests.Request(),
+            audience=settings.GOOGLE_CLIENT_ID,
+        )
+    except Exception as e:
+        logger.error(f"Google ID Token verification failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed. Please verify your credentials.",
+        )
+
+    # 4. Verify the Issuer (iss claim) explicitly
+    issuer = id_info.get("iss")
+    if issuer not in ["accounts.google.com", "https://accounts.google.com"]:
+        logger.error(f"Google ID Token has invalid issuer: {issuer}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed. Please verify your credentials.",
+        )
+
+    # 5. Check email verification (email_verified claim)
+    if not id_info.get("email_verified"):
+        logger.error("Google ID Token email is not verified.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed. Please verify your credentials.",
+        )
+
+    # 6. Extract claims (email, name, picture)
+    email = id_info.get("email")
+    if not email:
+        logger.error("Google ID Token claims do not include email.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed. Please verify your credentials.",
+        )
+
+    name = id_info.get("name", email.split("@")[0])
+    avatar_url = id_info.get("picture")
+
+    # 7. Authenticate or register the user
+    user, jwt_token = AuthService(db).google_login(
+        email=email,
+        name=name,
+        avatar_url=avatar_url,
     )
+
     return TokenResponse(
-        access_token=token,
+        access_token=jwt_token,
         token_type="bearer",
         user=UserResponse.model_validate(user),
     )

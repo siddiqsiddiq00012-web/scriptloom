@@ -14,7 +14,7 @@ from backend.db.database import SessionLocal
 client = TestClient(app)
 
 
-def test_streaming_and_webhooks_infrastructure():
+def test_streaming_and_webhooks_infrastructure(celery_eager):
     print("\n--- 1. Testing EventBus Publishing & Schema ---")
     received_events = []
 
@@ -44,6 +44,7 @@ def test_streaming_and_webhooks_infrastructure():
         url="http://127.0.0.1:59999/webhook-receiver",
         secret="sec_test_secret_123456",
         is_active=True,
+        subscribed_events=["*"],
     )
     db.add(endpoint)
     db.commit()
@@ -55,13 +56,20 @@ def test_streaming_and_webhooks_infrastructure():
         payload={"pack_name": "Test Campaign Pack"},
     )
 
-    # Dispatch to failing endpoint (should attempt retries and land in Dead Letter Queue)
-    success = WebhookDispatcher.dispatch_event(db, endpoint, test_payload_event)
-    assert success is False
+    from backend.core.config import settings
+    orig_retries = settings.WEBHOOK_MAX_RETRIES
+    settings.WEBHOOK_MAX_RETRIES = 0
+    
+    try:
+        # Dispatch to failing endpoint (should attempt retries and land in Dead Letter Queue)
+        dispatched = WebhookDispatcher.dispatch_event(db, test_payload_event)
+        assert len(dispatched) == 1
 
-    dlq_entry = db.query(DeadLetterQueue).first()
-    assert dlq_entry is not None
-    print("Failing webhook successfully escalated to Dead Letter Queue:", dlq_entry.reason)
+        dlq_entry = db.query(DeadLetterQueue).first()
+        assert dlq_entry is not None
+        print("Failing webhook successfully escalated to Dead Letter Queue:", dlq_entry.reason)
+    finally:
+        settings.WEBHOOK_MAX_RETRIES = orig_retries
 
     db.close()
     print("\n[SUCCESS] Streaming & Webhooks Infrastructure tests PASSED!")

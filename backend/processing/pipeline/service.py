@@ -28,6 +28,10 @@ class ProcessingPipeline:
         # Step 1: Transcribe
         transcription = self.transcriber.transcribe(video_path)
 
+        # Step 1b: Defensive guard against failed/empty transcription
+        if not transcription or not transcription.get("segments"):
+            raise RuntimeError("No transcript segments found to generate clips from.")
+
         # Step 2: Build transcript
         transcript = "\n".join(
             f"[{i}] ({segment['start']:.2f}s - {segment['end']:.2f}s) {segment['text']}"

@@ -1,101 +1,135 @@
 import hmac
 import hashlib
 import json
-import random
-import time
+import logging
 import uuid
-import requests
-from typing import Dict, Any, Optional
+import time
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
-from backend.models.webhook import WebhookEndpoint, WebhookDeliveryLog, DeadLetterQueue
+from backend.db.database import SessionLocal
+from backend.models.webhook import WebhookEndpoint, WebhookDeliveryLog
 from backend.events.event_bus import event_bus, EventSchema
+
+logger = logging.getLogger(__name__)
 
 
 class WebhookDispatcher:
     @staticmethod
-    def generate_signature(payload_bytes: bytes, secret: str) -> str:
+    def generate_signature(dispatch_timestamp: int, payload_json: str, secret: str) -> str:
+        message = f"{dispatch_timestamp}.{payload_json}"
         return hmac.new(
             secret.encode("utf-8"),
-            payload_bytes,
+            message.encode("utf-8"),
             hashlib.sha256,
         ).hexdigest()
 
     @staticmethod
     def dispatch_event(
         db: Session,
-        endpoint: WebhookEndpoint,
         event: EventSchema,
-    ) -> bool:
-        delivery_id = f"del_{uuid.uuid4().hex[:12]}"
-        timestamp_str = str(int(time.time()))
-        payload_bytes = json.dumps(event.model_dump()).encode("utf-8")
-        signature = WebhookDispatcher.generate_signature(payload_bytes, endpoint.secret)
+    ) -> list[str]:
+        # 1. Fetch active webhook endpoints matching the event user context
+        if not event.user_id:
+            logger.warning(f"Event {event.event_id} ({event.event_type}) has no user_id. Aborting webhook dispatch.")
+            return []
 
-        headers = {
-            "Content-Type": "application/json",
-            "X-Scriptloom-Signature": signature,
-            "X-Scriptloom-Event": event.event_type,
-            "X-Scriptloom-Timestamp": timestamp_str,
-            "X-Scriptloom-Delivery-ID": delivery_id,
-            "X-Scriptloom-Version": "1.0",
-        }
-
-        # Record initial delivery log
-        log_entry = WebhookDeliveryLog(
-            webhook_id=endpoint.id,
-            delivery_id=delivery_id,
-            event_type=event.event_type,
-            status_code=0,
-            attempts=1,
-            status="PENDING",
-            payload_json=event.model_dump(),
-        )
-        db.add(log_entry)
-        db.commit()
-
-        # Retry Schedule Delays (with jitter)
-        delays = [0, 30, 120, 600]
-        success = False
-        last_status_code = 0
-
-        for attempt_idx, delay in enumerate(delays, start=1):
-            if delay > 0:
-                jitter = random.uniform(0.5, 2.0)
-                time.sleep(delay * 0.05 + jitter)  # Compressed delay for responsive processing
-
-            try:
-                resp = requests.post(
-                    endpoint.url,
-                    data=payload_bytes,
-                    headers=headers,
-                    timeout=5.0,
-                )
-                last_status_code = resp.status_code
-                log_entry.status_code = last_status_code
-                log_entry.attempts = attempt_idx
-
-                if 200 <= resp.status_code < 300:
-                    log_entry.status = "DELIVERED"
-                    db.commit()
-                    success = True
-                    break
-                else:
-                    log_entry.status = "FAILED"
-                    db.commit()
-            except Exception as exc:
-                log_entry.attempts = attempt_idx
-                log_entry.status = "FAILED"
-                db.commit()
-
-        # If permanently failed after max retries, send to Dead Letter Queue
-        if not success:
-            log_entry.status = "DEAD_LETTER"
-            dlq_entry = DeadLetterQueue(
-                delivery_id=delivery_id,
-                reason=f"Exhausted retries. Last status code: {last_status_code}",
+        endpoints = (
+            db.query(WebhookEndpoint)
+            .filter(
+                WebhookEndpoint.user_id == event.user_id,
+                WebhookEndpoint.is_active == True,
             )
-            db.add(dlq_entry)
-            db.commit()
+            .all()
+        )
 
-        return success
+        dispatched_ids = []
+
+        # 2. Iterate and match subscription rules
+        for endpoint in endpoints:
+            subscribed = endpoint.subscribed_events
+            is_matched = False
+            if isinstance(subscribed, list):
+                is_matched = "*" in subscribed or event.event_type in subscribed
+
+            if not is_matched:
+                continue
+
+            # 3. Serialize payload exactly once to canonical format
+            canonical_payload = json.dumps(
+                event.model_dump(),
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+
+            delivery_id = f"del_{uuid.uuid4()}"
+            dispatch_timestamp = int(time.time())
+
+            # Create PENDING delivery log record
+            log_entry = WebhookDeliveryLog(
+                webhook_id=endpoint.id,
+                delivery_id=delivery_id,
+                event_type=event.event_type,
+                event_id=event.event_id,
+                status="PENDING",
+                attempt_count=0,
+                attempts=0,  # Sync attempts column for backward compatibility
+                request_url=endpoint.url,
+                response_status=None,
+                status_code=0,  # Sync status_code column for backward compatibility
+                failure_reason=None,
+                payload_json=canonical_payload,
+                dispatch_timestamp=dispatch_timestamp,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+            db.add(log_entry)
+            db.commit()
+            db.refresh(log_entry)
+
+            # 4. Asynchronously queue standard Celery task
+            from backend.jobs.tasks.webhook_delivery import deliver_webhook
+            from celery.exceptions import Retry
+            try:
+                deliver_webhook.delay(delivery_id)
+                dispatched_ids.append(delivery_id)
+                logger.info(
+                    f"Successfully queued webhook task {delivery_id} for url {endpoint.url}."
+                )
+            except Retry:
+                # Eager mode Celery retry trigger is treated as a successful queueing
+                dispatched_ids.append(delivery_id)
+            except Exception as cel_err:
+                # Dispatch failure compensation strategy:
+                # Mark delivery FAILED immediately inside DB if queue publication fails
+                log_entry.status = "FAILED"
+                log_entry.failure_reason = "Task queue dispatch failed"
+                log_entry.updated_at = datetime.now(timezone.utc)
+                db.commit()
+                logger.error(
+                    f"Celery dispatch failed for webhook delivery {delivery_id}: {cel_err}",
+                    exc_info=True,
+                )
+
+        return dispatched_ids
+
+
+def webhook_event_bus_subscriber(event: EventSchema):
+    """
+    Subscribes to all event_bus publications, resolving database context 
+    and routing matching event deliveries asynchronously.
+    """
+    db = SessionLocal()
+    try:
+        WebhookDispatcher.dispatch_event(db, event)
+    except Exception as err:
+        logger.error(
+            f"Error during event bus webhook dispatch for event {event.event_id}: {err}",
+            exc_info=True,
+        )
+    finally:
+        db.close()
+
+
+# Connect global event bus to webhooks delivery dispatcher
+event_bus.subscribe("*", webhook_event_bus_subscriber)

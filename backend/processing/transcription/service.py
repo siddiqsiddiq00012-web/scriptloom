@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from faster_whisper import WhisperModel
@@ -25,29 +26,36 @@ class WhisperService:
             / f"{video.stem}_audio.wav"
         )
 
-        self.ffmpeg.extract_audio(
-            str(video),
-            str(audio_path),
-        )
-
-        segments, info = self.model.transcribe(
-            str(audio_path),
-            beam_size=5,
-        )
-
-        transcript = []
-
-        for segment in segments:
-            transcript.append(
-                {
-                    "start": segment.start,
-                    "end": segment.end,
-                    "text": segment.text.strip(),
-                }
+        try:
+            self.ffmpeg.extract_audio(
+                str(video),
+                str(audio_path),
             )
 
-        return {
-            "language": info.language,
-            "duration": info.duration,
-            "segments": transcript,
-        }
+            segments, info = self.model.transcribe(
+                str(audio_path),
+                beam_size=5,
+            )
+
+            transcript = []
+
+            for segment in segments:
+                transcript.append(
+                    {
+                        "start": segment.start,
+                        "end": segment.end,
+                        "text": segment.text.strip(),
+                    }
+                )
+
+            return {
+                "language": info.language,
+                "duration": info.duration,
+                "segments": transcript,
+            }
+        finally:
+            if audio_path.exists():
+                try:
+                    os.remove(audio_path)
+                except Exception:
+                    pass

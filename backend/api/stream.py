@@ -2,11 +2,13 @@ import asyncio
 import json
 import time
 from typing import Dict, List
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from backend.db.dependencies import get_db
+from backend.core.dependencies import get_current_user, verify_media_ownership
+from backend.models.user import User
 from backend.events.event_bus import event_bus, EventSchema
 from backend.models.progress_event import ProgressEvent
 
@@ -53,8 +55,12 @@ sse_hub = SSEHub()
 @router.get("/progress/{media_id}")
 async def stream_media_progress(
     media_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Verify media ownership before subscribing to progress event stream
+    verify_media_ownership(media_id, current_user, db)
+
     q = sse_hub.add_client(media_id)
 
     async def _event_generator():

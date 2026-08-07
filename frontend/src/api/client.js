@@ -1,4 +1,6 @@
-const BASE_URL = "http://localhost:8000/api/v1";
+import { config } from "../config";
+
+const BASE_URL = config.apiUrl;
 
 export async function apiRequest(endpoint, options = {}) {
   const token = localStorage.getItem("token");
@@ -59,6 +61,11 @@ export const api = {
   put: (endpoint, body) =>
     apiRequest(endpoint, {
       method: "PUT",
+      body: JSON.stringify(body),
+    }),
+  patch: (endpoint, body) =>
+    apiRequest(endpoint, {
+      method: "PATCH",
       body: JSON.stringify(body),
     }),
   delete: (endpoint) => apiRequest(endpoint, { method: "DELETE" }),

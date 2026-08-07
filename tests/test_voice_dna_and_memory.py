@@ -75,11 +75,15 @@ def test_voice_dna_and_memory_flow():
     upload_res = client.post(
         f"/projects/{project_id}/media",
         files={"file": ("positioning_talk.wav", dummy_wav_header, "audio/wav")},
+        headers=headers,
     )
     media_id = upload_res.json()["id"]
 
     # Transcribe media
-    client.post(f"/media/{media_id}/transcribe")
+    from unittest.mock import patch
+    from tests.mock_stt_data import MOCK_STT_RESPONSE
+    with patch("backend.processing.stt_engine.STTEngine.transcribe", return_value=MOCK_STT_RESPONSE):
+        client.post(f"/media/{media_id}/transcribe", headers=headers)
 
     print("\n--- 5. Indexing Media Transcript into Creator Memory RAG Store ---")
     index_res = client.post(f"/creator-memory/index/{media_id}", headers=headers)

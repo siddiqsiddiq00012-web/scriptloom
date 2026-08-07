@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from sqlalchemy import Boolean, Integer, String, Text, DateTime, JSON, ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models.base import Base
 
@@ -43,6 +43,12 @@ class WebhookEndpoint(Base):
         default=lambda: datetime.now(timezone.utc),
     )
 
+    deliveries = relationship(
+        "WebhookDeliveryLog",
+        backref="webhook_endpoint",
+        cascade="all, delete-orphan",
+    )
+
 
 class WebhookDeliveryLog(Base):
     __tablename__ = "webhook_delivery_logs"
@@ -69,29 +75,82 @@ class WebhookDeliveryLog(Base):
         index=True,
     )
 
+    event_id: Mapped[str] = mapped_column(
+        String(100),
+        index=True,
+    )
+
+    # status_code kept for backward-compatibility
     status_code: Mapped[int] = mapped_column(
         Integer,
         default=0,
     )
 
+    # attempts kept for backward-compatibility
     attempts: Mapped[int] = mapped_column(
         Integer,
-        default=1,
+        default=0,
     )
 
     status: Mapped[str] = mapped_column(
         String(50),
-        default="PENDING",  # PENDING | DELIVERED | FAILED | DEAD_LETTER
+        default="PENDING",  # PENDING | PROCESSING | DELIVERED | FAILED
     )
 
-    payload_json: Mapped[dict] = mapped_column(
-        JSON,
+    attempt_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+    )
+
+    request_url: Mapped[str] = mapped_column(
+        String(500),
+        nullable=False,
+    )
+
+    response_status: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        default=None,
+    )
+
+    failure_reason: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        default=None,
+    )
+
+    # Stored as canonical JSON string byte-for-byte
+    payload_json: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    dispatch_timestamp: Mapped[int] = mapped_column(
+        Integer,
         nullable=False,
     )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    processing_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        default=None,
+    )
+
+    delivered_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        default=None,
     )
 
 

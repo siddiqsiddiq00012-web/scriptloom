@@ -12,6 +12,8 @@ import MediaLibrary from "../../components/media/MediaLibrary";
 import AnalyticsWorkspace from "../../components/analytics/AnalyticsWorkspace";
 import PublishingQueue from "../../components/publishing/PublishingQueue";
 import IngestionWorkspace from "../../components/ingestion/IngestionWorkspace";
+import ResourceWorkspace from "../../components/workspace/ResourceWorkspace";
+import HomeDashboard from "../../components/dashboard/HomeDashboard";
 import {
   Home,
   Folder,
