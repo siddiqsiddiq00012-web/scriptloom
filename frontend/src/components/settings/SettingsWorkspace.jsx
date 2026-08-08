@@ -24,10 +24,11 @@ import {
 import { getCurrentUser } from "../../api/auth";
 import { updateProfile, changePassword, deleteAccount, exportAccountData } from "../../api/users";
 import { api } from "../../api/client";
+import { getPlans, createCheckoutSession, formatPrice } from "../../api/billing";
 
 const PLANS = [
-  { key: "starter", label: "Starter (Free)", price: "$0/mo" },
-  { key: "founder_pro", label: "Founder Pro", price: "$49/mo" },
+  { key: "free", label: "Free", price: "$0/mo" },
+  { key: "pro", label: "Pro", price: "$19/mo" },
   { key: "enterprise", label: "Enterprise", price: "Custom" },
 ];
 
@@ -443,6 +444,8 @@ function AccountPane({ onShowToast }) {
 function BillingPane({ onShowToast }) {
   const [subscription, setSubscription] = useState(null);
   const [usage, setUsage] = useState(null);
+  const [plans, setPlans] = useState([]);
+  const [providerStatus, setProviderStatus] = useState(null);
   const [upgrading, setUpgrading] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -450,10 +453,14 @@ function BillingPane({ onShowToast }) {
     Promise.all([
       api.get("/billing/subscription"),
       api.get("/billing/usage"),
+      getPlans(),
+      api.get("/billing/provider-status"),
     ])
-      .then(([sub, useg]) => {
+      .then(([sub, useg, plansData, providerData]) => {
         setSubscription(sub);
         setUsage(useg);
+        setPlans(plansData || []);
+        setProviderStatus(providerData);
       })
       .catch(() => {
         if (onShowToast) onShowToast("Failed to load billing information.");
@@ -464,19 +471,49 @@ function BillingPane({ onShowToast }) {
   useEffect(() => { loadData(); }, [loadData]);
 
   const handleUpgrade = async (planKey) => {
+    if (planKey === "enterprise") {
+      window.location.href = "mailto:support@scriptloom.com?subject=Enterprise%20Plan%20Inquiry";
+      return;
+    }
     setUpgrading(true);
     try {
-      await api.post("/billing/upgrade", { plan_name: planKey });
-      if (onShowToast) onShowToast("Plan updated.");
-      await loadData();
+      const result = await createCheckoutSession({ plan_key: planKey, billing_cycle: "monthly" });
+      if (result?.url) {
+        window.location.href = result.url;
+      } else if (onShowToast) {
+        onShowToast("Checkout session could not be created.");
+      }
     } catch (err) {
-      if (onShowToast) onShowToast(err.message || "Failed to upgrade plan.");
+      if (onShowToast) onShowToast(err.message || "Failed to start checkout. Payments may not be configured.");
     } finally {
       setUpgrading(false);
     }
   };
 
   if (loading) return <div style={{ padding: "20px", color: "#64748B" }}><Loader2 className="lucide-spin" size={18} /> Loading billing...</div>;
+
+  const currentPlanKey = subscription?.plan_key || "free";
+  const paymentsConfigured = providerStatus?.is_configured === true;
+
+  const usageBar = (label, item, accent) => {
+    const used = item?.used ?? 0;
+    const limit = item?.limit;
+    const unlimited = limit === -1 || limit === undefined || limit === null;
+    const pct = !unlimited && limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
+    return (
+      <div className="settingsWorkspace__usageBar">
+        <div className="settingsWorkspace__usageInfo">
+          <span>{label}</span>
+          <strong>{unlimited ? "Unlimited" : `${used} / ${limit}`}</strong>
+        </div>
+        {!unlimited && (
+          <div className="settingsWorkspace__track">
+            <div className="settingsWorkspace__fill" style={{ width: `${pct}%`, background: accent }} />
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="settings__pane" style={{ maxWidth: "700px" }}>
@@ -486,37 +523,27 @@ function BillingPane({ onShowToast }) {
           <Crown size={24} color="#F59E0B" />
           <div>
             <h4>{subscription.plan_display_name || subscription.plan_name}</h4>
-            <p>Status: {subscription.status}</p>
+            <p>Status: {subscription.status}{subscription.billing_cycle ? ` · ${subscription.billing_cycle}` : ""}</p>
           </div>
+        </div>
+      )}
+
+      {!paymentsConfigured && (
+        <div className="settings__pane" style={{ padding: "10px 14px", background: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: 8, color: "#92400E", fontSize: 13 }}>
+          Payments are not configured on this deployment. Free plan features continue to work normally.
         </div>
       )}
 
       {usage && (
         <>
           <h3 style={{ marginTop: "12px" }}>Usage This Period</h3>
-          <div className="settingsWorkspace__usageBar">
-            <div className="settingsWorkspace__usageInfo">
-              <span>Processing</span>
-              <strong>{usage.hours_processed ?? 0} / {usage.hours_limit ?? 0} hours</strong>
-            </div>
-            <div className="settingsWorkspace__track">
-              <div className="settingsWorkspace__fill" style={{
-                width: `${usage.hours_limit ? Math.min(100, (usage.hours_processed / usage.hours_limit) * 100) : 0}%`
-              }} />
-            </div>
-          </div>
-          <div className="settingsWorkspace__usageBar">
-            <div className="settingsWorkspace__usageInfo">
-              <span>Content Packs</span>
-              <strong>{usage.campaign_packs_generated ?? 0} / {usage.campaign_packs_limit ?? 0}</strong>
-            </div>
-            <div className="settingsWorkspace__track">
-              <div className="settingsWorkspace__fill" style={{
-                width: `${usage.campaign_packs_limit ? Math.min(100, (usage.campaign_packs_generated / usage.campaign_packs_limit) * 100) : 0}%`,
-                background: "#8B5CF6",
-              }} />
-            </div>
-          </div>
+          {usageBar("Media Uploads", usage.media_uploads)}
+          {usageBar("Processing (minutes)", usage.processing_minutes, "var(--accent-purple)")}
+          {usageBar("AI Generations", usage.ai_generations, "var(--accent-cyan)")}
+          {usageBar("Storage (GB)", {
+            used: usage.storage?.used_gb ?? 0,
+            limit: usage.storage?.limit_gb,
+          }, "var(--accent-green)")}
           {usage.period_month && (
             <p style={{ fontSize: "12px", color: "#94a3b8" }}>Billing period: {usage.period_month}</p>
           )}
@@ -525,18 +552,23 @@ function BillingPane({ onShowToast }) {
 
       <h3 style={{ marginTop: "12px" }}>Change Plan</h3>
       <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-        {PLANS.map((p) => (
+        {(plans.length > 0 ? plans : PLANS.map((p) => ({ key: p.key, name: p.label }))).map((p) => (
           <button
             key={p.key}
             onClick={() => handleUpgrade(p.key)}
-            disabled={upgrading || subscription?.plan_name === p.key}
-            className={`planBtn ${subscription?.plan_name === p.key ? "planBtn--current" : ""}`}
+            disabled={upgrading || currentPlanKey === p.key}
+            className={`planBtn ${currentPlanKey === p.key ? "planBtn--current" : ""}`}
           >
-            {p.label} · {p.price}
-            {subscription?.plan_name === p.key && " (current)"}
+            {p.name || p.label}
+            {currentPlanKey === p.key && " (current)"}
           </button>
         ))}
       </div>
+      {!paymentsConfigured && (
+        <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "8px" }}>
+          Upgrade buttons will activate once payment processing is configured.
+        </p>
+      )}
     </div>
   );
 }

@@ -13,6 +13,8 @@ from backend.models.processing_job import JobStatus, ProcessingJob
 from backend.processing.jobs.manager import job_manager
 from backend.schemas.processing import ProcessingRequest
 from backend.jobs.tasks.video_processing import process_video as process_video_task
+from backend.services.billing_service import BillingService
+from backend.services.feature_gate import Feature
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +36,17 @@ def process_video(
     # 1. Verify media ownership before starting processing task
     verify_media_ownership(request.media_id, current_user, db)
 
-    # 2. Persist job entry in the database with concurrency safety
+    # 2. Check usage limits before starting processing
+    billing_service = BillingService(db)
+    media = db.get(Media, request.media_id)
+    processing_seconds = int(media.duration or 0) if media else 0
+    billing_service.check_quota(
+        current_user,
+        Feature.PROCESSING,
+        additional=max(1, processing_seconds // 60),
+    )
+
+    # 3. Persist job entry in the database with concurrency safety
     try:
         job = job_manager.create_job(
             db=db,

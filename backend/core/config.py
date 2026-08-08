@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     GEMINI_API_KEY: str
     REDIS_URL: str = "redis://localhost:6379/0"
     CELERY_BROKER_URL: str | None = None
@@ -54,6 +55,8 @@ class Settings(BaseSettings):
     RATE_LIMIT_UPLOAD: int = 10  # req/min
     RATE_LIMIT_AI: int = 20  # req/min
 
+    RATE_LIMIT_TRUSTED_PROXIES: str = "127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+
     VOICE_DNA_CACHE_TTL: int = 300  # seconds
     QUOTA_CACHE_TTL: int = 60  # seconds
     USER_PROFILE_CACHE_TTL: int = 300  # seconds
@@ -74,6 +77,12 @@ class Settings(BaseSettings):
     R2_BUCKET_NAME: str = ""
     R2_ACCESS_KEY_ID: str = ""
     R2_SECRET_ACCESS_KEY: str = ""
+
+    STRIPE_PUBLISHABLE_KEY: str = ""
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_PRICE_PRO_MONTHLY: str = ""
+    STRIPE_PRICE_PRO_ANNUAL: str = ""
 
     @field_validator("STORAGE_BACKEND")
     @classmethod

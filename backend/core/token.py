@@ -5,52 +5,84 @@ from jose import JWTError, jwt
 from backend.core.config import settings
 
 
+def _get_algorithm() -> str:
+    return getattr(settings, "JWT_ALGORITHM", getattr(settings, "ALGORITHM", "HS256"))
+
+
 def create_access_token(
     data: dict,
     expires_delta: timedelta | None = None,
 ) -> str:
-    """
-    Create a signed JWT access token.
-    """
-
+    """Create a signed JWT access token."""
     to_encode = data.copy()
 
     expire = datetime.now(timezone.utc) + (
         expires_delta
         if expires_delta
-        else timedelta(
-            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-        )
+        else timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
 
-    to_encode.update(
-        {
-            "exp": expire,
-        }
-    )
+    to_encode.update({"exp": expire})
 
     return jwt.encode(
         to_encode,
         settings.SECRET_KEY,
-        algorithm=settings.ALGORITHM,
+        algorithm=_get_algorithm(),
     )
 
 
 def verify_access_token(
     token: str,
 ) -> dict | None:
-    """
-    Verify and decode a JWT access token.
-    Returns the payload if valid, otherwise None.
-    """
-
+    """Verify and decode a JWT access token. Returns the payload if valid, otherwise None."""
     try:
         payload = jwt.decode(
             token,
             settings.SECRET_KEY,
-            algorithms=[settings.ALGORITHM],
+            algorithms=[_get_algorithm()],
         )
+        if payload.get("type") == "refresh":
+            return None
         return payload
+    except JWTError:
+        return None
 
+
+def create_refresh_token(
+    data: dict,
+    expires_delta: timedelta | None = None,
+) -> str:
+    """Create a signed JWT refresh token."""
+    to_encode = data.copy()
+    to_encode["type"] = "refresh"
+
+    expire = datetime.now(timezone.utc) + (
+        expires_delta
+        if expires_delta
+        else timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    )
+
+    to_encode.update({"exp": expire})
+
+    return jwt.encode(
+        to_encode,
+        settings.SECRET_KEY,
+        algorithm=_get_algorithm(),
+    )
+
+
+def verify_refresh_token(
+    token: str,
+) -> dict | None:
+    """Verify and decode a JWT refresh token. Returns the payload if valid, otherwise None."""
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[_get_algorithm()],
+        )
+        if payload.get("type") != "refresh":
+            return None
+        return payload
     except JWTError:
         return None

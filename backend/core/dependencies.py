@@ -1,9 +1,9 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
 from backend.core.config import settings
+from backend.core.token import verify_access_token
 from backend.db.dependencies import get_db
 from backend.repositories.user_repository import UserRepository
 from backend.models.user import User
@@ -16,11 +16,24 @@ from backend.models.webhook import WebhookEndpoint
 
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="/api/v1/auth/login",
+    auto_error=False,
 )
+
+COOKIE_NAME = "access_token"
+
+
+def _extract_token(request: Request) -> str | None:
+    """Extract the JWT from the httpOnly cookie or the Authorization header."""
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        return auth_header[7:].strip()
+
+    return request.cookies.get(COOKIE_NAME)
 
 
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
+    token: str | None = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ) -> User:
     credentials_exception = HTTPException(
@@ -28,19 +41,16 @@ def get_current_user(
         detail="Could not validate credentials",
     )
 
-    try:
-        payload = jwt.decode(
-            token,
-            settings.SECRET_KEY,
-            algorithms=[settings.ALGORITHM],
-        )
+    resolved_token = token or _extract_token(request)
+    if resolved_token is None:
+        raise credentials_exception
 
-        user_id = payload.get("sub")
+    payload = verify_access_token(resolved_token)
+    if payload is None:
+        raise credentials_exception
 
-        if user_id is None:
-            raise credentials_exception
-
-    except (JWTError, ValueError):
+    user_id = payload.get("sub")
+    if user_id is None:
         raise credentials_exception
 
     repository = UserRepository(db)

@@ -13,6 +13,7 @@ from backend.processing.pipeline.service import ProcessingPipeline
 from backend.repositories.clip_repository import ClipRepository
 from backend.repositories.media_repository import MediaRepository
 from backend.storage.manager import storage
+from backend.events.event_bus import event_bus, EventSchema, ProgressState
 
 
 class ProcessingService:
@@ -65,6 +66,25 @@ class ProcessingService:
         """
         uploaded_keys = []
 
+        # Publish progress events to the in-process EventBus, which fans out
+        # to SSE clients subscribed via /stream/progress/{media_id}.
+        def publish_progress(state: str, payload: dict = None):
+            try:
+                event_bus.publish(
+                    EventSchema(
+                        event_type=f"media.processing.{state}",
+                        user_id=self._job_user_id if hasattr(self, "_job_user_id") else None,
+                        media_id=self._job_media_id if hasattr(self, "_job_media_id") else None,
+                        payload={
+                            "job_id": job_id,
+                            "state": state,
+                            **(payload or {}),
+                        },
+                    )
+                )
+            except Exception as exc:
+                print(f"[EVENT PUBLISH ERROR] {state}: {exc}")
+
         try:
             job_manager.update_status(
                 self.db,
@@ -78,6 +98,11 @@ class ProcessingService:
             if media is None:
                 raise RuntimeError("Media record not found.")
 
+            self._job_user_id = media.user_id
+            self._job_media_id = media.id
+
+            publish_progress("started", {"media_id": media.id})
+
             # A. Materialize the remote/local file context
             with storage.materialize(media.storage_path) as materialized_video_path:
                 # B. Create temporary directory for FFmpeg workspace
@@ -88,6 +113,7 @@ class ProcessingService:
                     generated_clips = pipeline.process_video(
                         video_path=str(materialized_video_path),
                         output_directory=str(temp_output_dir),
+                        progress_callback=lambda state, payload: publish_progress(state, payload),
                     )
 
                     # 1. Upload subtitles to storage if they were generated
@@ -155,8 +181,14 @@ class ProcessingService:
                 JobStatus.COMPLETED,
             )
 
+            publish_progress("completed", {
+                "clips": len(final_clips_to_create),
+            })
+
         except Exception as err:
             traceback.print_exc()
+
+            publish_progress("failed", {"error": str(err)})
 
             # Compensation rollback: clean up newly persisted objects in storage upon error
             for key in uploaded_keys:

@@ -17,6 +17,8 @@ from backend.core.dependencies import (
 )
 from backend.schemas.media import MediaResponse
 from backend.services.upload_service import UploadService
+from backend.services.billing_service import BillingService
+from backend.services.feature_gate import Feature
 from backend.storage.manager import storage
 from backend.storage.base import validate_storage_key
 
@@ -39,12 +41,21 @@ async def upload_media(
     # Validate project ownership at the very beginning of the endpoint
     verify_project_ownership(project_id, current_user, db)
 
+    # Check usage limits before upload
+    billing_service = BillingService(db)
+    billing_service.check_quota(current_user, Feature.MEDIA_UPLOADS, additional=1)
+
     service = UploadService(db)
 
-    return await service.upload(
+    result = await service.upload(
         project_id=project_id,
         file=file,
     )
+
+    # Record usage after successful upload
+    billing_service.record_usage(current_user, media_uploads=1)
+
+    return result
 
 
 @router.get("/{project_id}/media")

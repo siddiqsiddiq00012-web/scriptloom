@@ -1,12 +1,8 @@
 import { config } from "../config";
 
 export async function exportContentAsset(contentId, format = "markdown") {
-  const token = localStorage.getItem("token");
-  
   const response = await fetch(`${config.apiUrl}/export/content/${contentId}?format=${format}`, {
-    headers: {
-      "Authorization": `Bearer ${token}`
-    }
+    credentials: "include",
   });
 
   if (!response.ok) {
@@ -15,7 +11,7 @@ export async function exportContentAsset(contentId, format = "markdown") {
 
   const blob = await response.blob();
   const url = window.URL.createObjectURL(blob);
-  
+
   // Extract filename from Content-Disposition header if available
   const contentDisposition = response.headers.get("Content-Disposition");
   let filename = `asset_${contentId}.${format}`;
@@ -36,12 +32,8 @@ export async function exportContentAsset(contentId, format = "markdown") {
 }
 
 export async function exportCampaignPack(mediaId) {
-  const token = localStorage.getItem("token");
-  
   const response = await fetch(`${config.apiUrl}/export/campaign-pack/${mediaId}`, {
-    headers: {
-      "Authorization": `Bearer ${token}`
-    }
+    credentials: "include",
   });
 
   if (!response.ok) {
@@ -50,7 +42,7 @@ export async function exportCampaignPack(mediaId) {
 
   const blob = await response.blob();
   const url = window.URL.createObjectURL(blob);
-  
+
   // Extract filename from Content-Disposition header if available
   const contentDisposition = response.headers.get("Content-Disposition");
   let filename = `campaign_${mediaId}.zip`;

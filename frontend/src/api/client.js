@@ -1,12 +1,11 @@
 import { config } from "../config";
 
 const BASE_URL = config.apiUrl;
+const CSRF_HEADER = "X-CSRF-Token";
 
 export async function apiRequest(endpoint, options = {}) {
-  const token = localStorage.getItem("token");
   const headers = {
     "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   };
 
@@ -15,17 +14,23 @@ export async function apiRequest(endpoint, options = {}) {
     delete headers["Content-Type"];
   }
 
+  // Attach CSRF token for state-changing requests so the httpOnly
+  // cookie auth stays protected against cross-site request forgery.
+  const method = (options.method || "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
+    const csrfToken = getCsrfToken();
+    if (csrfToken) headers[CSRF_HEADER] = csrfToken;
+  }
+
   const response = await fetch(`${BASE_URL}${endpoint}`, {
     ...options,
     headers,
+    credentials: "include",
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user_email");
-      localStorage.removeItem("user_name");
-      localStorage.removeItem("user_avatar");
+    if (response.status === 401 && !endpoint.startsWith("/auth/")) {
+      clearAuthState();
       if (window.location.pathname !== "/login") {
         window.location.href = "/login";
       }
@@ -55,6 +60,18 @@ export async function apiRequest(endpoint, options = {}) {
   }
 
   return await response.json();
+}
+
+function getCsrfToken() {
+  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+export function clearAuthState() {
+  localStorage.removeItem("token");
+  localStorage.removeItem("user_email");
+  localStorage.removeItem("user_name");
+  localStorage.removeItem("user_avatar");
 }
 
 export const api = {

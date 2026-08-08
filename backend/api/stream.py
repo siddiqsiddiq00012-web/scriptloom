@@ -16,6 +16,42 @@ router = APIRouter(
     tags=["SSE Progress Stream"],
 )
 
+# Map internal pipeline states to a client-facing progress envelope.
+STAGE_TO_PROGRESS = {
+    "started": (5, "Processing started"),
+    "processing": (5, "Processing started"),
+    "transcribing": (25, "Transcribing audio"),
+    "transcript_completed": (45, "Transcription complete"),
+    "analyzing": (55, "AI is selecting clips"),
+    "subtitles": (70, "Generating subtitles"),
+    "extracting_clip": (80, "Extracting clips"),
+    "clips_extracted": (92, "Clips extracted"),
+    "completed": (100, "Processing complete"),
+    "failed": (0, "Processing failed"),
+}
+
+
+def _build_progress_envelope(event: EventSchema) -> dict:
+    state = event.payload.get("state", event.event_type.rsplit(".", 1)[-1])
+    progress, message = STAGE_TO_PROGRESS.get(state, (0, state))
+    return {
+        "event": "progress",
+        "media_id": event.media_id,
+        "timestamp": event.timestamp,
+        "payload": {
+            "job_id": event.payload.get("job_id"),
+            "state": state,
+            "stage": state,
+            "progress": progress,
+            "message": message,
+            "clips": event.payload.get("clips"),
+            "segments": event.payload.get("segments"),
+            "index": event.payload.get("index"),
+            "total": event.payload.get("total"),
+            "error": event.payload.get("error"),
+        },
+    }
+
 
 class SSEHub:
     def __init__(self):
@@ -27,7 +63,8 @@ class SSEHub:
 
     def on_event_published(self, event: EventSchema):
         if event.media_id and event.media_id in self.subscribers:
-            data_str = event.model_dump_json()
+            envelope = _build_progress_envelope(event)
+            data_str = json.dumps(envelope)
             for q in self.subscribers[event.media_id]:
                 try:
                     q.put_nowait(data_str)

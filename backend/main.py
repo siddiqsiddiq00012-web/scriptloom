@@ -9,6 +9,7 @@ from backend.models import Base  # Imports all models via __init__.py
 from backend.middleware.request_id import RequestIDMiddleware
 from backend.core.security_headers import SecurityHeadersMiddleware
 from backend.middleware.rate_limiter import RateLimiterMiddleware
+from backend.middleware.csrf import CSRFMiddleware
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -17,6 +18,7 @@ app = FastAPI(
 
 # Add Middleware Stack
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(CSRFMiddleware)
 app.add_middleware(RateLimiterMiddleware)
 app.add_middleware(RequestIDMiddleware)
 
@@ -94,6 +96,17 @@ def startup():
     Base.metadata.create_all(bind=engine)
     _migrate_user_profile_fields()
     recover_stale_webhook_deliveries()
+
+    from backend.db.database import SessionLocal
+    from backend.services.billing_service import BillingService
+    db = SessionLocal()
+    try:
+        billing_service = BillingService(db)
+        billing_service.initialize_plans()
+    except Exception as e:
+        print(f"[BILLING INIT ERROR] Failed to initialize billing plans: {e}")
+    finally:
+        db.close()
 
 
 app.include_router(api_router, prefix="/api/v1")

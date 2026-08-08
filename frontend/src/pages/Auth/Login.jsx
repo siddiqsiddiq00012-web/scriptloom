@@ -63,12 +63,14 @@ function Login() {
     if (!resetEmail) return;
     setResetLoading(true);
     setError("");
+    setSuccess(false);
     try {
       await api.post("/auth/forgot-password", { email: resetEmail });
       setSuccess(true);
       setShowReset(false);
-    } catch {
-      setSuccess(true);
+    } catch (err) {
+      const msg = err?.message || "Password reset is not yet available.";
+      setError(msg);
       setShowReset(false);
     } finally {
       setResetLoading(false);
@@ -100,7 +102,7 @@ function Login() {
         {success && !showReset && (
           <div className="authCard__alert authCard__alert--success">
             <CheckCircle2 size={16} />
-            <span>If that email is registered, a password reset link has been sent.</span>
+            <span>Password reset is not yet available. Please contact support@scriptloom.com for account recovery.</span>
           </div>
         )}
 

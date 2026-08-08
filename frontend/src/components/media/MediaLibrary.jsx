@@ -56,25 +56,15 @@ function MediaLibrary({ onShowToast }) {
       })
     );
 
-    const waves = {};
-    await Promise.all(
-      allMedia.map(async (m) => {
-        try {
-          const waveData = await api.get(`/projects/media/${m.id}/waveform`);
-          if (waveData?.peaks?.length > 0) waves[m.id] = samplePeaks(waveData.peaks, 28);
-        } catch { waves[m.id] = null; }
-      })
-    );
-
-    return { projectsMap: pMap, mediaItems: allMedia, waveformData: waves };
+    return { projectsMap: pMap, mediaItems: allMedia };
   }, []);
 
   const loadData = useCallback(() => {
     return fetchMediaData()
-      .then(({ projectsMap: pMap, mediaItems: items, waveformData: waves }) => {
+      .then(({ projectsMap: pMap, mediaItems: items }) => {
         setProjectsMap(pMap);
         setMediaItems(items);
-        setWaveformData(waves);
+        setWaveformData({});
         const ids = Object.keys(pMap);
         if (ids.length > 0) {
           setSelectedProjectId((prev) => (prev && ids.includes(prev) ? prev : ids[0]));
@@ -123,6 +113,19 @@ function MediaLibrary({ onShowToast }) {
   const filtered = mediaItems.filter((item) =>
     (item.filename || "").toLowerCase().includes(search.toLowerCase())
   );
+
+  const fetchWaveformOnDemand = useCallback(async (mediaId) => {
+    if (waveformData[mediaId] !== undefined) return;
+    setWaveformData((prev) => ({ ...prev, [mediaId]: null }));
+    try {
+      const waveData = await api.get(`/projects/media/${mediaId}/waveform`);
+      if (waveData?.peaks?.length > 0) {
+        setWaveformData((prev) => ({ ...prev, [mediaId]: samplePeaks(waveData.peaks, 28) }));
+      }
+    } catch {
+      setWaveformData((prev) => ({ ...prev, [mediaId]: null }));
+    }
+  }, [waveformData]);
 
   return (
     <div className="animate-fadeIn">
@@ -184,7 +187,10 @@ function MediaLibrary({ onShowToast }) {
                 {item._projectName && <><span>·</span><span>{item._projectName}</span></>}
               </div>
 
-              <div className="media__waveform">
+              <div
+                className="media__waveform"
+                onMouseEnter={() => fetchWaveformOnDemand(item.id)}
+              >
                 <Activity size={14} color="var(--primary)" />
                 <div className="media__peaks">
                   {waveformData[item.id] ? (

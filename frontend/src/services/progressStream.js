@@ -24,11 +24,9 @@ class ProgressStreamService {
     this.notifyListeners({ type: "connection_change", state: "CONNECTING" });
 
     const url = `${config.apiUrl}/stream/progress/${mediaId}`;
-    const token = localStorage.getItem("token");
-    const headers = token ? { "Authorization": `Bearer ${token}` } : {};
 
     try {
-      const response = await fetch(url, { headers });
+      const response = await fetch(url, { credentials: "include" });
 
       // Handle non-2xx responses before consuming the stream
       if (!response.ok) {

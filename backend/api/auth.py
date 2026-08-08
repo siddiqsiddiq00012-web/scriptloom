@@ -1,5 +1,6 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
+import secrets
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from google.oauth2 import id_token
@@ -11,6 +12,7 @@ from backend.db.dependencies import get_db
 from backend.models.user import User
 from backend.schemas.auth import (
     PasswordResetRequest,
+    TokenRefreshRequest,
     TokenResponse,
     UserLogin,
     UserRegister,
@@ -26,6 +28,76 @@ router = APIRouter(
     tags=["Authentication"],
 )
 
+COOKIE_NAME = "access_token"
+SESSION_COOKIE_NAME = "session_active"
+CSRF_COOKIE_NAME = "csrf_token"
+CSRF_HEADER = "X-CSRF-Token"
+
+
+def _set_auth_cookie(response: Response, token: str):
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=not settings.DEBUG,
+        samesite="lax",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+    # Non-httpOnly session flag so the SPA can cheaply detect auth state.
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value="1",
+        httponly=False,
+        secure=not settings.DEBUG,
+        samesite="lax",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+
+
+def _clear_auth_cookie(response: Response):
+    response.delete_cookie(key=COOKIE_NAME, path="/")
+    response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
+
+
+def _set_csrf_cookie(response: Response):
+    csrf = secrets.token_urlsafe(32)
+    response.set_cookie(
+        key=CSRF_COOKIE_NAME,
+        value=csrf,
+        httponly=False,
+        secure=not settings.DEBUG,
+        samesite="lax",
+        path="/",
+    )
+    return csrf
+
+
+def _build_token_response(response: Response, user: User, access_token: str, refresh_token: str) -> TokenResponse:
+    _set_auth_cookie(response, access_token)
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+        user=UserResponse.model_validate(user),
+    )
+
+
+@router.get("/csrf-token")
+def get_csrf_token(response: Response):
+    csrf = _set_csrf_cookie(response)
+    return {"csrf_token": csrf}
+
+
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def logout(response: Response):
+    _clear_auth_cookie(response)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
 
 @router.post(
     "/register",
@@ -34,6 +106,7 @@ router = APIRouter(
 )
 def register(
     user: UserRegister,
+    response: Response,
     db: Session = Depends(get_db),
 ):
     try:
@@ -51,13 +124,31 @@ def register(
             detail="Email already registered.",
         )
 
-    created_user, token = result
+    created_user, token, refresh_token = result
 
-    return TokenResponse(
-        access_token=token,
-        token_type="bearer",
-        user=UserResponse.model_validate(created_user),
-    )
+    return _build_token_response(response, created_user, token, refresh_token)
+
+
+@router.post(
+    "/refresh",
+    response_model=TokenResponse,
+)
+def refresh(
+    data: TokenRefreshRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    result = AuthService(db).refresh(data.refresh_token)
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token.",
+        )
+
+    user, token, refresh_token = result
+
+    return _build_token_response(response, user, token, refresh_token)
 
 
 @router.post(
@@ -66,6 +157,7 @@ def register(
 )
 def login(
     credentials: UserLogin,
+    response: Response,
     db: Session = Depends(get_db),
 ):
     result = AuthService(db).login(credentials)
@@ -76,7 +168,7 @@ def login(
             detail="Invalid email or password.",
         )
 
-    user, token = result
+    user, token, refresh_token = result
 
     if not user.is_active:
         raise HTTPException(
@@ -84,11 +176,7 @@ def login(
             detail="Account has been deactivated. Please contact support.",
         )
 
-    return TokenResponse(
-        access_token=token,
-        token_type="bearer",
-        user=UserResponse.model_validate(user),
-    )
+    return _build_token_response(response, user, token, refresh_token)
 
 
 @router.get(
@@ -103,17 +191,16 @@ def me(
 
 @router.post(
     "/forgot-password",
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_501_NOT_IMPLEMENTED,
 )
 def forgot_password(
     data: PasswordResetRequest,
     db: Session = Depends(get_db),
 ):
-    user = AuthService(db).get_user_by_email(data.email)
-    # Return success regardless of whether email exists for privacy/security
-    return {
-        "message": "If the email is registered, a password reset link has been sent."
-    }
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Password reset is not yet available. Please contact support@scriptloom.com for account recovery.",
+    )
 
 
 @router.post(
@@ -122,6 +209,7 @@ def forgot_password(
 )
 def google_auth(
     payload: GoogleAuthRequest,
+    response: Response,
     db: Session = Depends(get_db),
 ):
     # 1. Ensure GOOGLE_CLIENT_ID is configured on the server
@@ -187,14 +275,10 @@ def google_auth(
     avatar_url = id_info.get("picture")
 
     # 7. Authenticate or register the user
-    user, jwt_token = AuthService(db).google_login(
+    user, jwt_token, refresh_token = AuthService(db).google_login(
         email=email,
         name=name,
         avatar_url=avatar_url,
     )
 
-    return TokenResponse(
-        access_token=jwt_token,
-        token_type="bearer",
-        user=UserResponse.model_validate(user),
-    )
+    return _build_token_response(response, user, jwt_token, refresh_token)

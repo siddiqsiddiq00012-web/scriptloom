@@ -6,12 +6,8 @@ export async function getProjectClips(projectId) {
 }
 
 export async function getClipStreamUrl(clipId) {
-  const token = localStorage.getItem("token");
-  
   const response = await fetch(`${config.apiUrl}/clips/${clipId}/stream`, {
-    headers: {
-      "Authorization": `Bearer ${token}`
-    }
+    credentials: "include",
   });
 
   if (!response.ok) {

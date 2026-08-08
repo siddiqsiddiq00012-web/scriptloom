@@ -257,3 +257,62 @@ class ContentGenerator:
         self.db.refresh(asset)
 
         return asset
+
+    def rewrite_content(
+        self,
+        original_body: str,
+        content_type: str,
+        tone: str | None = None,
+        extra_instructions: str | None = None,
+    ) -> str:
+        """Rewrite existing content with a different tone or instructions."""
+        config = CONTENT_TYPE_CONFIGS.get(content_type, {})
+
+        prompt = (
+            "You are a professional content writer. Rewrite the following content.\n\n"
+            f"Content type: {content_type}\n"
+        )
+
+        if tone:
+            prompt += f"New tone: {tone}\n"
+        if extra_instructions:
+            prompt += f"Additional instructions: {extra_instructions}\n"
+
+        prompt += (
+            f"\nOriginal content:\n{original_body}\n\n"
+            "Return the rewritten content as valid JSON with the same keys as the original. "
+            "Do not include a 'title' key. Only return the rewritten fields."
+        )
+
+        last_error = None
+        for model in self.models:
+            try:
+                response = self.client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.75,
+                        top_p=0.90,
+                    ),
+                )
+
+                if not response.text:
+                    raise RuntimeError("Gemini returned empty response")
+
+                raw = response.text.strip()
+                if raw.startswith("```json"):
+                    raw = raw[7:].strip()
+                elif raw.startswith("```"):
+                    raw = raw[3:].strip()
+                if raw.endswith("```"):
+                    raw = raw[:-3].strip()
+
+                json.loads(raw)
+                return raw
+
+            except Exception as exc:
+                logger.warning(f"Model {model} failed for rewrite: {exc}")
+                last_error = exc
+                continue
+
+        raise RuntimeError(f"AI rewrite failed. All models exhausted. Last error: {last_error}")

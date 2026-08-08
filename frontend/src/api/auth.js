@@ -1,15 +1,11 @@
-import { api } from "./client";
+import { api, clearAuthState } from "./client";
 
 export async function registerUser(name, email, password) {
   if (!email || !password) {
     throw new Error("Email and password are required for registration.");
   }
   const data = await api.post("/auth/register", { name: name || email.split("@")[0], email, password });
-  if (data.access_token) {
-    localStorage.setItem("token", data.access_token);
-    localStorage.setItem("user_email", data.user?.email || email);
-    localStorage.setItem("user_name", data.user?.name || name || email.split("@")[0]);
-  }
+  storeUserProfile(data.user, email, name);
   return data;
 }
 
@@ -18,14 +14,7 @@ export async function loginUser(email, password) {
     throw new Error("Email and password are required.");
   }
   const data = await api.post("/auth/login", { email, password });
-  if (data.access_token) {
-    localStorage.setItem("token", data.access_token);
-    if (data.user) {
-      localStorage.setItem("user_email", data.user.email || email);
-      localStorage.setItem("user_name", data.user.name || email.split("@")[0]);
-      if (data.user.avatar_url) localStorage.setItem("user_avatar", data.user.avatar_url);
-    }
-  }
+  storeUserProfile(data.user, email);
   return data;
 }
 
@@ -38,19 +27,27 @@ export async function loginWithGoogle(credential) {
     credential: credential
   });
 
-  if (data.access_token) {
-    localStorage.setItem("token", data.access_token);
-    if (data.user) {
-      localStorage.setItem("user_email", data.user.email);
-      localStorage.setItem("user_name", data.user.name);
-      if (data.user.avatar_url) localStorage.setItem("user_avatar", data.user.avatar_url);
-    }
-  }
+  storeUserProfile(data.user);
   return data;
 }
 
+function storeUserProfile(user, fallbackEmail, fallbackName) {
+  // The JWT now lives in an httpOnly cookie; only non-sensitive profile
+  // metadata is mirrored to localStorage for quick display.
+  if (user) {
+    localStorage.setItem("user_email", user.email || fallbackEmail || "");
+    localStorage.setItem("user_name", user.name || fallbackName || (user.email ? user.email.split("@")[0] : ""));
+    if (user.avatar_url) localStorage.setItem("user_avatar", user.avatar_url);
+  } else {
+    if (fallbackEmail) localStorage.setItem("user_email", fallbackEmail);
+    if (fallbackName) localStorage.setItem("user_name", fallbackName);
+  }
+}
+
 export function isAuthenticated() {
-  return !!localStorage.getItem("token");
+  // The access token is in an httpOnly cookie, invisible to JS. Detect
+  // the non-httpOnly session flag cookie set alongside it.
+  return document.cookie.split(";").some((c) => c.trim().startsWith("session_active="));
 }
 
 export function getUserProfile() {
@@ -72,11 +69,13 @@ export function getUserProfile() {
   };
 }
 
-export function logoutUser() {
-  localStorage.removeItem("token");
-  localStorage.removeItem("user_email");
-  localStorage.removeItem("user_name");
-  localStorage.removeItem("user_avatar");
+export async function logoutUser() {
+  try {
+    await api.post("/auth/logout");
+  } catch {
+    // Cookie is cleared client-side regardless.
+  }
+  clearAuthState();
 }
 
 export async function getCurrentUser() {

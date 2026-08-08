@@ -22,6 +22,8 @@ from backend.services.content_generator import (
     SUPPORTED_CONTENT_TYPES,
     CONTENT_TYPE_CONFIGS,
 )
+from backend.services.billing_service import BillingService
+from backend.services.feature_gate import Feature
 
 router = APIRouter(
     prefix="/generation",
@@ -158,6 +160,10 @@ def generate_content_for_media(
     """Generate a single content asset from a specific media resource using AI."""
     verify_media_ownership(media_id, current_user, db)
 
+    # Check AI generation quota before calling the LLM
+    billing_service = BillingService(db)
+    billing_service.check_quota(current_user, Feature.AI_GENERATIONS, additional=1)
+
     generator = ContentGenerator(db)
     try:
         asset = generator.generate(
@@ -168,6 +174,8 @@ def generate_content_for_media(
             length=request.length,
             extra_instructions=request.extra_instructions,
         )
+        # Record AI generation usage after successful generation
+        billing_service.record_usage(current_user, ai_generations=1)
         return GeneratedContentResponse.model_validate(asset)
     except ValueError as val_err:
         raise HTTPException(
@@ -227,3 +235,87 @@ def delete_generated_content(
     asset = verify_content_ownership(content_id, current_user, db)
     db.delete(asset)
     db.commit()
+
+
+@router.get("/library")
+def get_content_library(
+    content_type: str | None = None,
+    project_id: int | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return all generated content across all projects, filterable by type."""
+    from backend.models.project import Project
+    from backend.models.media import Media
+
+    user_project_ids = [p.id for p in db.query(Project.id).filter(Project.owner_id == current_user.id).all()]
+
+    query = (
+        db.query(GeneratedContent)
+        .filter(GeneratedContent.project_id.in_(user_project_ids))
+        .order_by(GeneratedContent.created_at.desc())
+    )
+
+    if content_type:
+        query = query.filter(GeneratedContent.content_type == content_type)
+    if project_id and project_id in user_project_ids:
+        query = query.filter(GeneratedContent.project_id == project_id)
+
+    total = query.count()
+    assets = query.offset(offset).limit(limit).all()
+
+    result = []
+    for asset in assets:
+        media = db.get(Media, asset.media_id) if asset.media_id else None
+        result.append({
+            "id": asset.id,
+            "content_type": asset.content_type,
+            "title": asset.title,
+            "body_json": asset.body_json,
+            "status": asset.status,
+            "created_at": asset.created_at.isoformat() if asset.created_at else None,
+            "media_id": asset.media_id,
+            "media_filename": media.filename if media else None,
+            "project_id": asset.project_id,
+        })
+
+    return {
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "items": result,
+    }
+
+
+@router.post("/content/{content_id}/rewrite")
+def rewrite_content(
+    content_id: int,
+    data: ContentGenerationRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Rewrite a generated content asset with a different tone or instructions."""
+    asset = verify_content_ownership(content_id, current_user, db)
+
+    from backend.services.content_generator import ContentGenerator
+    generator = ContentGenerator(db)
+
+    try:
+        rewritten = generator.rewrite_content(
+            original_body=asset.body_json,
+            content_type=asset.content_type,
+            tone=data.tone,
+            extra_instructions=data.extra_instructions,
+        )
+    except RuntimeError as rt_err:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(rt_err),
+        )
+
+    asset.body_json = rewritten
+    db.commit()
+    db.refresh(asset)
+    return GeneratedContentResponse.model_validate(asset)

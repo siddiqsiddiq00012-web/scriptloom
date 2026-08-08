@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "./Dashboard.css";
 import {
@@ -17,6 +17,7 @@ import {
   ArrowUpRight,
   Clock,
   BarChart3,
+  CreditCard,
 } from "lucide-react";
 
 import { getCurrentUser, getUserProfile, logoutUser, isAuthenticated } from "../../api/auth";
@@ -41,11 +42,21 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   const [toastMessage, setToastMessage] = useState("");
+  const toastTimerRef = useRef(null);
 
   const showToast = useCallback((msg) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToastMessage(msg);
-    const t = setTimeout(() => setToastMessage(""), 3000);
-    return () => clearTimeout(t);
+    toastTimerRef.current = setTimeout(() => {
+      setToastMessage("");
+      toastTimerRef.current = null;
+    }, 3000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -80,14 +91,16 @@ function Dashboard() {
     { id: "dashboard", label: "Dashboard", icon: Home },
     { id: "projects", label: "Projects", icon: Folder },
     { id: "media", label: "Media Library", icon: Image },
-    { id: "settings", label: "Settings", icon: Settings },
+    { id: "billing", label: "Billing", icon: CreditCard, href: "/billing" },
+    { id: "content-library", label: "Content Library", icon: FileText, href: "/content" },
+    { id: "settings", label: "Settings", icon: Settings, href: "/settings" },
   ];
 
-  const usagePercent = usage?.hours_limit
-    ? Math.min(100, (usage.hours_processed / usage.hours_limit) * 100)
+  const usagePercent = usage?.processing_minutes?.limit
+    ? Math.min(100, (usage.processing_minutes.used / usage.processing_minutes.limit) * 100)
     : 0;
-  const packsPercent = usage?.campaign_packs_limit
-    ? Math.min(100, (usage.campaign_packs_generated / usage.campaign_packs_limit) * 100)
+  const aiPercent = usage?.ai_generations?.limit
+    ? Math.min(100, (usage.ai_generations.used / usage.ai_generations.limit) * 100)
     : 0;
 
   return (
@@ -123,10 +136,10 @@ function Dashboard() {
                     {usage?.plan_display_name && <span className="badge badge-success">{usage.plan_display_name}</span>}
                   </div>
                   <div className="appDropdown__divider" />
-                  <button className="appDropdown__item" onClick={() => { setActiveTab("settings"); setIsProfileMenuOpen(false); }}>
+                  <button className="appDropdown__item" onClick={() => { navigate("/settings"); setIsProfileMenuOpen(false); }}>
                     <User size={15} /> Account
                   </button>
-                  <button className="appDropdown__item" onClick={() => { setActiveTab("settings"); setIsProfileMenuOpen(false); }}>
+                  <button className="appDropdown__item" onClick={() => { navigate("/settings"); setIsProfileMenuOpen(false); }}>
                     <Settings size={15} /> Settings
                   </button>
                   <div className="appDropdown__divider" />
@@ -147,7 +160,11 @@ function Dashboard() {
             {menuItems.map((item) => {
               const Icon = item.icon;
               return (
-                <button key={item.id} className={`appDashboard__navItem ${activeTab === item.id ? "appDashboard__navItem--active" : ""}`} onClick={() => setActiveTab(item.id)}>
+                <button
+                  key={item.id}
+                  className={`appDashboard__navItem ${activeTab === item.id ? "appDashboard__navItem--active" : ""}`}
+                  onClick={() => item.href ? navigate(item.href) : setActiveTab(item.id)}
+                >
                   <Icon size={18} />
                   <span>{item.label}</span>
                 </button>
@@ -178,9 +195,9 @@ function Dashboard() {
                   <div className="dash__metric card card-padding animate-fadeInUp stagger-1">
                     <div className="dash__metricIcon dash__metricIcon--blue"><Zap size={20} /></div>
                     <div>
-                      <span className="dash__metricLabel">Hours Processed</span>
-                      <h3 className="dash__metricValue">{usage?.hours_processed ?? 0}</h3>
-                      <p className="dash__metricSub">of {usage?.hours_limit ?? "—"} monthly</p>
+                      <span className="dash__metricLabel">Processing</span>
+                      <h3 className="dash__metricValue">{usage?.processing_minutes?.used ?? 0}</h3>
+                      <p className="dash__metricSub">of {usage?.processing_minutes?.limit === -1 ? "unlimited" : (usage?.processing_minutes?.limit ?? "—")} min monthly</p>
                     </div>
                     <div className="dash__metricProgress">
                       <div className="progress-track"><div className="progress-fill" style={{ width: `${usagePercent}%` }} /></div>
@@ -190,12 +207,12 @@ function Dashboard() {
                   <div className="dash__metric card card-padding animate-fadeInUp stagger-2">
                     <div className="dash__metricIcon dash__metricIcon--purple"><FileText size={20} /></div>
                     <div>
-                      <span className="dash__metricLabel">Content Packs</span>
-                      <h3 className="dash__metricValue">{usage?.campaign_packs_generated ?? 0}</h3>
-                      <p className="dash__metricSub">of {usage?.campaign_packs_limit ?? "—"} monthly</p>
+                      <span className="dash__metricLabel">AI Generations</span>
+                      <h3 className="dash__metricValue">{usage?.ai_generations?.used ?? 0}</h3>
+                      <p className="dash__metricSub">of {usage?.ai_generations?.limit === -1 ? "unlimited" : (usage?.ai_generations?.limit ?? "—")} monthly</p>
                     </div>
                     <div className="dash__metricProgress">
-                      <div className="progress-track"><div className="progress-fill" style={{ width: `${packsPercent}%`, background: "var(--accent-purple)" }} /></div>
+                      <div className="progress-track"><div className="progress-fill" style={{ width: `${aiPercent}%`, background: "var(--accent-purple)" }} /></div>
                     </div>
                   </div>
 
@@ -211,9 +228,9 @@ function Dashboard() {
                   <div className="dash__metric card card-padding animate-fadeInUp stagger-4">
                     <div className="dash__metricIcon dash__metricIcon--green"><BarChart3 size={20} /></div>
                     <div>
-                      <span className="dash__metricLabel">Hours Remaining</span>
-                      <h3 className="dash__metricValue">{usage?.hours_remaining ?? "—"}</h3>
-                      <p className="dash__metricSub">this billing cycle</p>
+                      <span className="dash__metricLabel">Media Uploads</span>
+                      <h3 className="dash__metricValue">{usage?.media_uploads?.used ?? 0}</h3>
+                      <p className="dash__metricSub">of {usage?.media_uploads?.limit === -1 ? "unlimited" : (usage?.media_uploads?.limit ?? "—")} this cycle</p>
                     </div>
                   </div>
                 </div>

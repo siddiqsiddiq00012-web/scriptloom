@@ -33,6 +33,7 @@ class UserResponse(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: str | None = None
     token_type: str = "bearer"
     user: UserResponse
 
@@ -53,6 +54,10 @@ class PasswordChangeRequest(BaseModel):
 
 class PasswordResetRequest(BaseModel):
     email: EmailStr
+
+
+class TokenRefreshRequest(BaseModel):
+    refresh_token: str
 
 
 class GoogleAuthRequest(BaseModel):

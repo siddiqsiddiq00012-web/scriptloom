@@ -4,7 +4,7 @@ from backend.core.security import (
     hash_password,
     verify_password,
 )
-from backend.core.token import create_access_token
+from backend.core.token import create_access_token, create_refresh_token
 from backend.repositories.user_repository import UserRepository
 from backend.schemas.auth import UserLogin, UserRegister
 
@@ -12,6 +12,11 @@ from backend.schemas.auth import UserLogin, UserRegister
 class AuthService:
     def __init__(self, db: Session):
         self.users = UserRepository(db)
+
+    def _issue_tokens(self, user_id: int) -> tuple[str, str]:
+        access_token = create_access_token({"sub": str(user_id)})
+        refresh_token = create_refresh_token({"sub": str(user_id)})
+        return access_token, refresh_token
 
     def register(
         self,
@@ -32,13 +37,9 @@ class AuthService:
             ),
         )
 
-        token = create_access_token(
-            {
-                "sub": str(created_user.id),
-            }
-        )
+        access_token, refresh_token = self._issue_tokens(created_user.id)
 
-        return created_user, token
+        return created_user, access_token, refresh_token
 
     def login(
         self,
@@ -57,13 +58,30 @@ class AuthService:
         ):
             return None
 
-        token = create_access_token(
-            {
-                "sub": str(user.id),
-            }
-        )
+        access_token, refresh_token = self._issue_tokens(user.id)
 
-        return user, token
+        return user, access_token, refresh_token
+
+    def refresh(
+        self,
+        refresh_token: str,
+    ) -> tuple | None:
+        from backend.core.token import verify_refresh_token
+
+        payload = verify_refresh_token(refresh_token)
+        if payload is None:
+            return None
+
+        user_id = payload.get("sub")
+        if user_id is None:
+            return None
+
+        user = self.users.get_by_id(int(user_id))
+        if user is None:
+            return None
+
+        access_token, new_refresh_token = self._issue_tokens(user.id)
+        return user, access_token, new_refresh_token
 
     def google_login(
         self,
@@ -87,8 +105,8 @@ class AuthService:
                 user.avatar_url = avatar_url
                 self.users.db.commit()
 
-        token = create_access_token({"sub": str(user.id)})
-        return user, token
+        access_token, refresh_token = self._issue_tokens(user.id)
+        return user, access_token, refresh_token
 
     def get_user_by_email(
         self,

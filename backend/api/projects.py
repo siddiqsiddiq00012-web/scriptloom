@@ -10,6 +10,8 @@ from backend.schemas.project import (
     ProjectUpdate,
 )
 from backend.services.project_service import ProjectService
+from backend.services.billing_service import BillingService
+from backend.services.feature_gate import Feature
 
 router = APIRouter(
     prefix="/projects",
@@ -27,6 +29,9 @@ def create_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    billing_service = BillingService(db)
+    billing_service.check_quota(current_user, Feature.PROJECTS, additional=1)
+
     return ProjectService(db).create_project(
         current_user=current_user,
         project_data=project,
