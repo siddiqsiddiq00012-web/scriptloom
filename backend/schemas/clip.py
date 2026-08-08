@@ -9,11 +9,11 @@ class ClipCreate(BaseModel):
         max_length=255,
     )
 
-    start_time: int = Field(
+    start_time: float = Field(
         ge=0,
     )
 
-    end_time: int = Field(
+    end_time: float = Field(
         gt=0,
     )
 
@@ -25,17 +25,15 @@ class ClipUpdate(BaseModel):
         max_length=255,
     )
 
-    start_time: int | None = Field(
+    start_time: float | None = Field(
         default=None,
         ge=0,
     )
 
-    end_time: int | None = Field(
+    end_time: float | None = Field(
         default=None,
         gt=0,
     )
-
-    status: str | None = None
 
     output_path: str | None = None
 
@@ -45,10 +43,11 @@ class ClipResponse(BaseModel):
     project_id: int
     media_id: int
     title: str
-    start_time: int
-    end_time: int
-    status: str
+    start_time: float
+    end_time: float
+    reason: str
     output_path: str | None
+    subtitle_path: str | None = None
 
     model_config = ConfigDict(
         from_attributes=True,

@@ -24,9 +24,29 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+def _migrate_user_profile_fields():
+    """Add profile fields to users table if they don't exist."""
+    from sqlalchemy import text
+    db = engine.connect()
+    try:
+        for col, typedef in [
+            ("bio", "TEXT"),
+            ("company", "VARCHAR(200)"),
+            ("role", "VARCHAR(100)"),
+            ("timezone", "VARCHAR(100)"),
+        ]:
+            try:
+                db.execute(text(f"ALTER TABLE users ADD COLUMN {col} {typedef}"))
+                db.commit()
+            except Exception:
+                pass  # Column already exists
+    finally:
+        db.close()
 
 
 def recover_stale_webhook_deliveries():
@@ -72,6 +92,7 @@ def recover_stale_webhook_deliveries():
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
+    _migrate_user_profile_fields()
     recover_stale_webhook_deliveries()
 
 

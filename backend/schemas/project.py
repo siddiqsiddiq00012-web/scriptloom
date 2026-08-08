@@ -9,7 +9,8 @@ class ProjectCreate(BaseModel):
 
 
 class ProjectUpdate(BaseModel):
-    name: str = Field(
+    name: str | None = Field(
+        default=None,
         min_length=1,
         max_length=255,
     )

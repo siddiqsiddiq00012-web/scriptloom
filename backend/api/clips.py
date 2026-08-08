@@ -52,6 +52,12 @@ def stream_clip(
     # Verify clip ownership before retrieval
     clip = verify_clip_ownership(clip_id, current_user, db)
 
+    if not clip.output_path:
+        raise HTTPException(
+            status_code=404,
+            detail="Clip file not found in storage.",
+        )
+
     if not storage.exists(clip.output_path):
         raise HTTPException(
             status_code=404,

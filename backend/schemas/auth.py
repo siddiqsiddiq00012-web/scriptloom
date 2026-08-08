@@ -20,6 +20,10 @@ class UserResponse(BaseModel):
     is_active: bool = True
     is_verified: bool = False
     avatar_url: str | None = None
+    bio: str | None = None
+    company: str | None = None
+    role: str | None = None
+    timezone: str | None = None
     created_at: datetime | None = None
 
     model_config = {
@@ -36,6 +40,15 @@ class TokenResponse(BaseModel):
 class ProfileUpdate(BaseModel):
     name: str | None = None
     avatar_url: str | None = None
+    bio: str | None = None
+    company: str | None = None
+    role: str | None = None
+    timezone: str | None = None
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(..., min_length=6)
+    new_password: str = Field(..., min_length=6)
 
 
 class PasswordResetRequest(BaseModel):

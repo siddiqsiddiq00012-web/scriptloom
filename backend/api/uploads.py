@@ -246,7 +246,17 @@ def stream_media(
         )
 
     raw_filename = media.filename
-    media_type = "video/mp4" if raw_filename.lower().endswith((".mp4", ".mov", ".avi", ".mkv", ".webm")) else "audio/mpeg"
+    ext = raw_filename.rsplit(".", 1)[-1].lower() if "." in raw_filename else ""
+    if ext in ("mp4", "mov", "avi", "mkv", "webm", "ogv"):
+        media_type = "video/mp4"
+    elif ext in ("wav", "flac"):
+        media_type = "audio/wav"
+    elif ext in ("aac", "m4a"):
+        media_type = "audio/aac"
+    elif ext == "mp3":
+        media_type = "audio/mpeg"
+    else:
+        media_type = "application/octet-stream"
     
     # Use safe ASCII filename for Content-Disposition to avoid latin-1 encoding errors
     safe_filename = raw_filename.encode("ascii", errors="ignore").decode("ascii").strip()

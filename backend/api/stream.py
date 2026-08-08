@@ -10,7 +10,6 @@ from backend.db.dependencies import get_db
 from backend.core.dependencies import get_current_user, verify_media_ownership
 from backend.models.user import User
 from backend.events.event_bus import event_bus, EventSchema
-from backend.models.progress_event import ProgressEvent
 
 router = APIRouter(
     prefix="/stream",
@@ -89,4 +88,12 @@ async def stream_media_progress(
         finally:
             sse_hub.remove_client(media_id, q)
 
-    return StreamingResponse(_event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )

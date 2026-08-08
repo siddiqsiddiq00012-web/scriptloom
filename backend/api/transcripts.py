@@ -59,7 +59,7 @@ def transcribe_media(
     except STTTranscriptionError as e:
         logging.error(f"[STTEngine Transcription Error] {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Failed to transcribe media: No speech detected or invalid audio."
         )
     except HTTPException as he:

@@ -26,3 +26,19 @@ class CampaignPackResponse(BaseModel):
 class ContentUpdate(BaseModel):
     title: str | None = None
     body_json: str | None = None
+
+
+class ContentGenerationRequest(BaseModel):
+    content_type: str
+    tone: str | None = None
+    audience: str | None = None
+    length: str | None = None
+    extra_instructions: str | None = None
+
+
+class ContentTypeOption(BaseModel):
+    key: str
+    label: str
+    description: str
+    category: str
+    available: bool = True

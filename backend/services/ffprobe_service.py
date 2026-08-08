@@ -3,6 +3,7 @@ import os
 import subprocess
 from pathlib import Path
 
+from backend.core.config import settings
 from backend.schemas.video_metadata import VideoMetadata
 
 
@@ -11,7 +12,7 @@ class FFprobeService:
     def extract_metadata(file_path: str | Path) -> VideoMetadata:
         file_path_str = str(file_path)
         command = [
-            "ffprobe",
+            settings.FFPROBE_PATH,
             "-v",
             "quiet",
             "-print_format",
@@ -27,6 +28,7 @@ class FFprobeService:
                 capture_output=True,
                 text=True,
                 check=True,
+                timeout=settings.FFPROBE_TIMEOUT,
             )
             data = json.loads(result.stdout)
 

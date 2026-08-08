@@ -58,10 +58,13 @@ class ProjectService:
             project_id,
         )
 
-        return self.repository.update_project_name(
-            project,
-            project_data.name,
-        )
+        if project_data.name is not None:
+            project = self.repository.update_project_name(
+                project,
+                project_data.name,
+            )
+
+        return project
 
     def delete_project(
         self,

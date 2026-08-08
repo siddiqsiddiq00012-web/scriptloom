@@ -43,6 +43,11 @@ export async function apiRequest(endpoint, options = {}) {
     throw error;
   }
 
+  // Handle 204 No Content (e.g. DELETE)
+  if (response.status === 204) {
+    return null;
+  }
+
   // Handle binary blob responses (e.g. ZIP export)
   const contentType = response.headers.get("content-type");
   if (contentType && (contentType.includes("application/zip") || contentType.includes("octet-stream"))) {

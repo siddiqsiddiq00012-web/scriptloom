@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import String, Boolean, DateTime
+from sqlalchemy import String, Boolean, DateTime, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.models.base import Base
@@ -39,6 +39,26 @@ class User(Base):
 
     avatar_url: Mapped[str | None] = mapped_column(
         String(500),
+        nullable=True,
+    )
+
+    bio: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    company: Mapped[str | None] = mapped_column(
+        String(200),
+        nullable=True,
+    )
+
+    role: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    timezone: Mapped[str | None] = mapped_column(
+        String(100),
         nullable=True,
     )
 

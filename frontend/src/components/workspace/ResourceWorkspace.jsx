@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   AlertCircle,
@@ -20,7 +20,7 @@ import { config } from "../../config";
 import { getMediaDetails, getMediaTranscript, transcribeMedia } from "../../api/media";
 import { getProcessingJob, getLatestJobForMedia, startProcessing } from "../../api/processing";
 import { getProjectClips, getClipStreamUrl } from "../../api/clips";
-import { generateCampaignPack, getCampaignPack, updateGeneratedContent } from "../../api/generation";
+import { generateCampaignPack, getCampaignPack, updateGeneratedContent, getContentTypes, generateContent, getMediaContent, deleteGeneratedContent } from "../../api/generation";
 import { exportContentAsset, exportCampaignPack } from "../../api/exports";
 import { progressStream } from "../../services/progressStream";
 import "./ResourceWorkspace.css";
@@ -770,25 +770,50 @@ function ClipsView({ projectId, mediaId }) {
 }
 
 function ContentView({ mediaId }) {
-  const [pack, setPack] = useState(null);
+  // Content type definitions grouped by category
+  const contentTypes = useMemo(() => ({
+    social: [
+      { key: "linkedin_post", label: "LinkedIn Post", desc: "Professional post with hook and insight" },
+      { key: "x_thread", label: "X Thread", desc: "Twitter/X thread (5-8 tweets)" },
+      { key: "instagram_caption", label: "Instagram Caption", desc: "Caption with hashtags" },
+    ],
+    long_form: [
+      { key: "newsletter", label: "Newsletter", desc: "Email newsletter in markdown" },
+      { key: "article", label: "Blog Article", desc: "SEO-friendly blog article" },
+      { key: "video_script", label: "Video Script", desc: "Short-form script with cues" },
+    ],
+    ideas: [
+      { key: "hook", label: "Hooks", desc: "10 powerful opening hooks" },
+      { key: "title", label: "Titles", desc: "10 headline options" },
+      { key: "content_idea", label: "Content Ideas", desc: "8 ideas with platforms" },
+    ],
+  }), []);
+
+  const categoryLabels = { social: "SOCIAL", long_form: "LONG-FORM", ideas: "IDEAS" };
+
+  const [generatedByType, setGeneratedByType] = useState({});
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [editingContent, setEditingContent] = useState(null);
-  const [editBody, setEditBody] = useState("");
-  const [savingContent, setSavingContent] = useState(false);
+  const [generatingType, setGeneratingType] = useState(null);
+  const [selectedType, setSelectedType] = useState(null);
+  const [genOptions, setGenOptions] = useState({ tone: "", audience: "", length: "", extra_instructions: "" });
+  const [expandedAsset, setExpandedAsset] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
 
-  const loadPack = useCallback(async () => {
+  const loadContent = useCallback(async () => {
     try {
-      const data = await getCampaignPack(mediaId);
-      setPack(data);
+      const data = await getMediaContent(mediaId);
+      setGeneratedByType(data.by_type || {});
+      setTotalCount(data.total_count || 0);
       setError("");
     } catch (err) {
       if (err.status === 404) {
-        setPack(null);
+        setGeneratedByType({});
+        setTotalCount(0);
         setError("");
       } else {
-        setError("Failed to load content.");
+        setError("Failed to load generated content.");
       }
     }
   }, [mediaId]);
@@ -796,195 +821,280 @@ function ContentView({ mediaId }) {
   useEffect(() => {
     let active = true;
     Promise.resolve()
-      .then(() => loadPack())
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [loadPack]);
+      .then(() => loadContent())
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [loadContent]);
 
   const handleGenerate = async () => {
-    setIsGenerating(true);
+    if (!selectedType) return;
+    setGeneratingType(selectedType);
     setError("");
     try {
-      const data = await generateCampaignPack(mediaId);
-      if (data && Array.isArray(data.assets)) {
-        setPack(data);
+      await generateContent(mediaId, {
+        content_type: selectedType,
+        tone: genOptions.tone || undefined,
+        audience: genOptions.audience || undefined,
+        length: genOptions.length || undefined,
+        extra_instructions: genOptions.extra_instructions || undefined,
+      });
+      await loadContent();
+      setSelectedType(null);
+      setGenOptions({ tone: "", audience: "", length: "", extra_instructions: "" });
+    } catch (err) {
+      const msg = err.message || "Unknown error";
+      if (err.status === 400 && msg.includes("transcript")) {
+        setError("This resource does not have a completed transcript yet. Please transcribe it first.");
+      } else if (err.status === 502) {
+        setError("The AI provider could not complete this request. Please try again.");
       } else {
-        await loadPack();
+        setError("Generation failed: " + msg);
       }
-    } catch (err) {
-      setError("Content generation failed: " + (err.message || "Unknown error"));
     } finally {
-      setIsGenerating(false);
+      setGeneratingType(null);
     }
   };
 
-  const startEdit = (asset) => {
-    setEditingContent(asset);
-    setEditBody(typeof asset.body_json === "string" ? asset.body_json : JSON.stringify(asset.body_json, null, 2));
-  };
-
-  const cancelEdit = () => {
-    setEditingContent(null);
-    setEditBody("");
-  };
-
-  const handleSaveEdit = async (asset) => {
-    setSavingContent(true);
-    setError("");
+  const handleDelete = async (contentId) => {
     try {
-      await updateGeneratedContent(asset.id, { body_json: editBody });
-      await loadPack();
-      setEditingContent(null);
-      setEditBody("");
+      await deleteGeneratedContent(contentId);
+      await loadContent();
+      setExpandedAsset(null);
     } catch (err) {
-      setError("Failed to save content: " + (err.message || "Unknown error"));
-    } finally {
-      setSavingContent(false);
+      setError("Failed to delete content: " + (err.message || "Unknown error"));
     }
   };
 
-  const handleExportSingle = async (contentId) => {
+  const handleCopy = async (asset) => {
     try {
-      await exportContentAsset(contentId, "markdown");
-    } catch (err) {
-      setError("Failed to export asset: " + (err.message || "Unknown error"));
+      const text = typeof asset.body_json === "string" ? asset.body_json : JSON.stringify(asset.body_json, null, 2);
+      await navigator.clipboard.writeText(text);
+      setCopiedId(asset.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      setError("Failed to copy to clipboard.");
     }
   };
 
-  const handleExportAll = async () => {
+  const getAssetsForType = (typeKey) => generatedByType[typeKey] || [];
+  const getLatestForType = (typeKey) => getAssetsForType(typeKey)[0] || null;
+
+  const parseBody = (bodyJson) => {
     try {
-      await exportCampaignPack(mediaId);
-    } catch (err) {
-      setError("Failed to export campaign pack: " + (err.message || "Unknown error"));
+      const obj = typeof bodyJson === "string" ? JSON.parse(bodyJson) : bodyJson;
+      return obj;
+    } catch {
+      return { raw: bodyJson };
     }
   };
 
-  if (loading) {
-    return (
-      <div className="stateBox">
-        <Loader2 className="lucide-spin" size={18} /> Loading AI content…
-      </div>
-    );
-  }
-
-  if (error && !pack) {
-    return (
-      <div className="stateBox stateBox--error">
-        <AlertCircle size={18} /> {error}
-      </div>
-    );
-  }
-
-  if (!pack) {
-    return (
-      <div className="emptyState">
-        <div className="emptyState__icon">
-          <Sparkles size={36} color="#4F46E5" />
-        </div>
-        <h3 className="emptyState__title">No AI content yet</h3>
-        <p className="emptyState__text">
-          Generate a campaign pack to turn this resource into ready-to-publish social content.
-        </p>
-        <button className="btn btn--primary" onClick={handleGenerate} disabled={isGenerating}>
-          {isGenerating ? (
-            <>
-              <Loader2 className="lucide-spin" size={16} /> Generating…
-            </>
-          ) : (
-            <>
-              <Sparkles size={16} /> Generate Content
-            </>
-          )}
-        </button>
-      </div>
-    );
-  }
-
-  const assets = Array.isArray(pack.assets) ? pack.assets : [];
-
-  return (
-    <div className="contentView">
-      {error && (
-        <div className="inlineError">
-          <AlertCircle size={15} /> {error}
-        </div>
-      )}
-
-      <div className="contentHeader">
-        <h3 className="contentHeader__title">
-          Campaign Pack
-          <span className="contentHeader__count">{pack.count || assets.length} Assets</span>
-        </h3>
-        <button className="btn btn--success" onClick={handleExportAll}>
-          <Download size={16} /> Export All (ZIP)
-        </button>
-      </div>
-
-      {assets.length === 0 ? (
-        <div className="stateBox">No assets in this pack yet.</div>
-      ) : (
-        <div className="contentList">
-          {assets.map((asset) => (
-            <div key={asset.id} className="contentAsset">
-              <div className="contentAsset__header">
-                <div className="contentAsset__heading">
-                  <h4 className="contentAsset__title">{asset.title}</h4>
-                  {asset.content_type && <span className="contentTypeBadge">{asset.content_type}</span>}
-                </div>
-                <div className="contentAsset__actions">
-                  <button className="btn btn--outline btn--sm" onClick={() => handleExportSingle(asset.id)}>
-                    <Download size={13} /> Download
-                  </button>
-                  {editingContent?.id === asset.id ? (
-                    <button className="btn btn--ghost btn--sm" onClick={cancelEdit}>
-                      <X size={13} /> Cancel
-                    </button>
-                  ) : (
-                    <button className="btn btn--outline btn--sm" onClick={() => startEdit(asset)}>
-                      <Pencil size={13} /> Edit
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {editingContent?.id === asset.id ? (
-                <div className="contentAsset__editor">
-                  <textarea
-                    className="contentAsset__textarea"
-                    value={editBody}
-                    onChange={(e) => setEditBody(e.target.value)}
-                    rows={12}
-                  />
-                  <div className="contentAsset__editorActions">
-                    <button
-                      className="btn btn--primary btn--sm"
-                      onClick={() => handleSaveEdit(asset)}
-                      disabled={savingContent}
-                    >
-                      {savingContent ? (
-                        <>
-                          <Loader2 className="lucide-spin" size={13} /> Saving…
-                        </>
-                      ) : (
-                        <>
-                          <Check size={13} /> Save Changes
-                        </>
-                      )}
-                    </button>
-                    <button className="btn btn--ghost btn--sm" onClick={cancelEdit}>
-                      <X size={13} /> Cancel
-                    </button>
-                  </div>
-                </div>
+  const renderBody = (bodyJson) => {
+    const parsed = parseBody(bodyJson);
+    if (parsed.markdown) return <div className="contentAsset__body">{parsed.markdown}</div>;
+    if (Array.isArray(parsed)) {
+      return (
+        <div className="contentAsset__body">
+          {parsed.map((item, i) => (
+            <div key={i} className="contentAsset__slide">
+              {typeof item === "string" ? (
+                <p>{item}</p>
               ) : (
-                <div className="contentAsset__body">{parseBodyJson(asset.body_json)}</div>
+                <pre className="contentAsset__json">{JSON.stringify(item, null, 2)}</pre>
               )}
             </div>
           ))}
+        </div>
+      );
+    }
+    if (parsed.tweets) {
+      return (
+        <div className="contentAsset__body">
+          {parsed.tweets.map((t, i) => <p key={i} className="contentAsset__tweet">{t}</p>)}
+        </div>
+      );
+    }
+    if (parsed.hooks) {
+      return (
+        <div className="contentAsset__body">
+          <ol>{parsed.hooks.map((h, i) => <li key={i}>{h}</li>)}</ol>
+        </div>
+      );
+    }
+    if (parsed.titles) {
+      return (
+        <div className="contentAsset__body">
+          <ol>{parsed.titles.map((t, i) => <li key={i}>{t}</li>)}</ol>
+        </div>
+      );
+    }
+    if (parsed.ideas) {
+      return (
+        <div className="contentAsset__body">
+          {parsed.ideas.map((idea, i) => (
+            <div key={i} className="contentAsset__idea">
+              <strong>{idea.platform}</strong>: {idea.description}
+              {idea.source_topic && <span className="contentAsset__source"> (from: {idea.source_topic})</span>}
+            </div>
+          ))}
+        </div>
+      );
+    }
+    if (parsed.hook) {
+      return (
+        <div className="contentAsset__body">
+          {parsed.hook && <div><strong>Hook:</strong> {parsed.hook}</div>}
+          {parsed.body && <div><strong>Body:</strong> {parsed.body}</div>}
+          {parsed.cta && <div><strong>CTA:</strong> {parsed.cta}</div>}
+          {parsed.visual_cues && <div className="contentAsset__cues"><em>{parsed.visual_cues}</em></div>}
+        </div>
+      );
+    }
+    return <pre className="contentAsset__json">{JSON.stringify(parsed, null, 2)}</pre>;
+  };
+
+  if (loading) {
+    return <div className="stateBox"><Loader2 className="lucide-spin" size={18} /> Loading content studio…</div>;
+  }
+
+  return (
+    <div className="contentView">
+      {error && <div className="inlineError"><AlertCircle size={15} /> {error}</div>}
+
+      {/* Content Type Selection Grid */}
+      {Object.entries(contentTypes).map(([cat, types]) => (
+        <div key={cat} className="contentStudio__category">
+          <h4 className="contentStudio__categoryLabel">{categoryLabels[cat]}</h4>
+          <div className="contentStudio__grid">
+            {types.map((ct) => {
+              const assets = getAssetsForType(ct.key);
+              const latest = assets[0];
+              const isGenerating = generatingType === ct.key;
+              const isExpanded = expandedAsset?.content_type === ct.key;
+
+              return (
+                <div key={ct.key} className={`contentStudio__card ${latest ? "contentStudio__card--generated" : ""}`}>
+                  <div className="contentStudio__cardHeader">
+                    <div>
+                      <span className="contentStudio__cardTitle">{ct.label}</span>
+                      <span className="contentStudio__cardDesc">{ct.desc}</span>
+                    </div>
+                    <span className={`contentStudio__badge ${latest ? "contentStudio__badge--done" : ""}`}>
+                      {latest ? assets.length : "—"}
+                    </span>
+                  </div>
+
+                  {latest ? (
+                    <div className="contentStudio__cardActions">
+                      <button className="btn btn--primary btn--sm" onClick={() => setExpandedAsset(isExpanded ? null : latest)}>
+                        {isExpanded ? "Hide" : "View"}
+                      </button>
+                      <button className="btn btn--outline btn--sm" onClick={() => { setSelectedType(ct.key); }} disabled={!!generatingType}>
+                        Regenerate
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="contentStudio__cardActions">
+                      <button className="btn btn--primary btn--sm" onClick={() => setSelectedType(ct.key)} disabled={!!generatingType}>
+                        {isGenerating ? <><Loader2 className="lucide-spin" size={13} /> Generating…</> : <><Sparkles size={13} /> Generate</>}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Inline expanded view of generated content */}
+                  {isExpanded && latest && (
+                    <div className="contentStudio__expanded">
+                      {renderBody(latest.body_json)}
+                      <div className="contentStudio__expandedActions">
+                        <button className="btn btn--ghost btn--sm" onClick={() => handleCopy(latest)}>
+                          {copiedId === latest.id ? <><Check size={13} /> Copied!</> : <><FileText size={13} /> Copy</>}
+                        </button>
+                        <button className="btn btn--ghost btn--sm contentStudio__deleteBtn" onClick={() => handleDelete(latest.id)}>
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      {/* Generation Dialog */}
+      {selectedType && (
+        <div className="genDialog__overlay" onClick={() => setSelectedType(null)}>
+          <div className="genDialog" onClick={(e) => e.stopPropagation()}>
+            <div className="genDialog__header">
+              <h3 className="genDialog__title">Generate {contentTypes.social.concat(contentTypes.long_form, contentTypes.ideas).find(c => c.key === selectedType)?.label || selectedType}</h3>
+              <button className="btn btn--ghost btn--sm" onClick={() => setSelectedType(null)}><X size={16} /></button>
+            </div>
+            <div className="genDialog__body">
+              {generatingType === selectedType ? (
+                <div className="genDialog__progress">
+                  <Loader2 className="lucide-spin" size={24} />
+                  <p>Generating content from your transcript…</p>
+                  <p className="genDialog__hint">This usually takes 5-15 seconds.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="genDialog__field">
+                    <label className="genDialog__label">Tone</label>
+                    <select className="genDialog__select" value={genOptions.tone} onChange={(e) => setGenOptions({ ...genOptions, tone: e.target.value })}>
+                      <option value="">Any tone</option>
+                      <option value="Professional">Professional</option>
+                      <option value="Casual">Casual</option>
+                      <option value="Authoritative">Authoritative</option>
+                      <option value="Conversational">Conversational</option>
+                      <option value="Inspirational">Inspirational</option>
+                    </select>
+                  </div>
+                  <div className="genDialog__field">
+                    <label className="genDialog__label">Audience</label>
+                    <select className="genDialog__select" value={genOptions.audience} onChange={(e) => setGenOptions({ ...genOptions, audience: e.target.value })}>
+                      <option value="">General audience</option>
+                      <option value="Executives">Executives</option>
+                      <option value="Technical">Technical professionals</option>
+                      <option value="Founders">Founders &amp; CEOs</option>
+                      <option value="Marketers">Marketers</option>
+                      <option value="Developers">Developers</option>
+                    </select>
+                  </div>
+                  <div className="genDialog__field">
+                    <label className="genDialog__label">Length</label>
+                    <select className="genDialog__select" value={genOptions.length} onChange={(e) => setGenOptions({ ...genOptions, length: e.target.value })}>
+                      <option value="">Auto</option>
+                      <option value="Short">Short</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Long">Long</option>
+                    </select>
+                  </div>
+                  <div className="genDialog__field">
+                    <label className="genDialog__label">Additional instructions (optional)</label>
+                    <textarea
+                      className="genDialog__textarea"
+                      value={genOptions.extra_instructions}
+                      onChange={(e) => setGenOptions({ ...genOptions, extra_instructions: e.target.value })}
+                      placeholder="e.g. Focus on the product launch section"
+                      rows={3}
+                    />
+                  </div>
+                  <div className="genDialog__actions">
+                    <button className="btn btn--outline" onClick={() => setSelectedType(null)}>Cancel</button>
+                    <button className="btn btn--primary" onClick={handleGenerate}>
+                      <Sparkles size={15} /> Generate
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {totalCount === 0 && !selectedType && (
+        <div className="contentStudio__summary">
+          <p className="contentStudio__summaryText">Choose a content type above to generate AI content from your transcript.</p>
         </div>
       )}
     </div>

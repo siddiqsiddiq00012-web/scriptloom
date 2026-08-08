@@ -31,7 +31,9 @@ class ExportEngine:
             raise ValueError(f"Generated asset #{content_id} not found")
 
         fmt = format_type.lower()
-        title_slug = asset.title.lower().replace(" ", "_").replace(":", "")
+        if fmt not in ("json", "txt", "text", "markdown", "md"):
+            raise ValueError(f"Unsupported export format '{format_type}'. Supported: markdown, txt, json")
+        title_slug = asset.title.lower().replace(" ", "_").replace(":", "").replace("/", "_").replace("\\", "_")
 
         if fmt == "json":
             filename = f"{title_slug}.json"

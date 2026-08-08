@@ -51,7 +51,7 @@ class WebhookEndpointCreate(BaseModel):
 
 class WebhookEndpointUpdate(BaseModel):
     url: Optional[str] = Field(None, max_length=500)
-    secret: Optional[str] = Field(None, max_length=255)
+    secret: Optional[str] = Field(None, min_length=16, max_length=255)
     subscribed_events: Optional[List[str]] = None
     is_active: Optional[bool] = None
 
