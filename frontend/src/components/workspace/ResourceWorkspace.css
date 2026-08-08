@@ -442,6 +442,7 @@
 .processing__done {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   background: #ecfdf5;
   border: 1px solid #a7f3d0;

@@ -18,7 +18,7 @@ router = APIRouter(
 
 
 @router.post(
-    "/",
+    "",
     response_model=ProjectResponse,
     status_code=status.HTTP_201_CREATED,
 )
@@ -34,7 +34,7 @@ def create_project(
 
 
 @router.get(
-    "/",
+    "",
     response_model=list[ProjectResponse],
 )
 def list_projects(

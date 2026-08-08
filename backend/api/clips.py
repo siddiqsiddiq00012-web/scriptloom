@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from urllib.parse import quote
 
 from backend.db.dependencies import get_db
 from backend.models.user import User
@@ -57,9 +58,19 @@ def stream_clip(
             detail="Clip file not found in storage.",
         )
 
-    filename = clip.title.lower().replace(" ", "_") + ".mp4"
+    # Use a safe ASCII filename for Content-Disposition to avoid latin-1 encoding errors
+    safe_filename = f"clip_{clip_id}.mp4"
+    # Use RFC 5987 encoding for non-ASCII titles in the filename* parameter
+    ascii_title = clip.title.encode("ascii", errors="ignore").decode("ascii").strip().replace(" ", "_")
+    if ascii_title:
+        display_filename = f"{ascii_title}.mp4"
+    else:
+        display_filename = safe_filename
+
     return StreamingResponse(
         storage.read_stream(clip.output_path),
         media_type="video/mp4",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f"inline; filename=\"{safe_filename}\"; filename*=UTF-8''{quote(display_filename)}",
+        },
     )

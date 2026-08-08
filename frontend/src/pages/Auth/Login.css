@@ -104,6 +104,20 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
+.authCard__googleBtnWrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.authCard__googleBtnWrapper > div {
+  width: 100%;
+}
+
+.authCard__googleBtnWrapper iframe {
+  width: 100% !important;
+}
+
 .authCard__divider {
   display: flex;
   align-items: center;

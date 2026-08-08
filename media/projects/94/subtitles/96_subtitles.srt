@@ -1,0 +1,12 @@
+1
+00:00:00,000 --> 00:00:04,640
+Hello world. This is a test video for the clip generation pipeline.
+
+2
+00:00:05,520 --> 00:00:11,200
+It has multiple segments. We will see if the AI can extract a good clip from this amazing
+
+3
+00:00:11,200 --> 00:00:19,440
+and very important speech.
+

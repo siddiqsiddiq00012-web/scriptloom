@@ -9,7 +9,7 @@ from backend.db.dependencies import get_db
 from backend.models.user import User
 from backend.models.media import Media
 from backend.models.project import Project
-from backend.models.processing_job import JobStatus
+from backend.models.processing_job import JobStatus, ProcessingJob
 from backend.processing.jobs.manager import job_manager
 from backend.schemas.processing import ProcessingRequest
 from backend.jobs.tasks.video_processing import process_video as process_video_task

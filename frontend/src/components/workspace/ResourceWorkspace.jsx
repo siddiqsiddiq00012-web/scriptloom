@@ -81,10 +81,11 @@ export default function ResourceWorkspace() {
   const [error, setError] = useState("");
   const [isStarting, setIsStarting] = useState(false);
   const [progressInfo, setProgressInfo] = useState(null);
+  const [clipsVersion, setClipsVersion] = useState(0);
 
   const jobStatus = job?.status;
   const jobId = job?.job_id;
-  const hasActiveJob = jobStatus === "PENDING" || jobStatus === "PROCESSING";
+  const hasActiveJob = jobStatus === "pending" || jobStatus === "processing";
 
   const fetchMedia = useCallback(async () => {
     const data = await getMediaDetails(mediaId);
@@ -118,14 +119,16 @@ export default function ResourceWorkspace() {
 
   // Poll job status while a processing job is active.
   useEffect(() => {
-    if (jobStatus !== "PENDING" && jobStatus !== "PROCESSING") return undefined;
+    if (jobStatus !== "pending" && jobStatus !== "processing") return undefined;
     const interval = setInterval(async () => {
       try {
         const j = await getProcessingJob(jobId);
         setJob(j);
-        if (j.status === "COMPLETED" || j.status === "FAILED") {
+        if (j.status === "completed" || j.status === "failed") {
           progressStream.disconnect();
           fetchMedia().catch(() => {});
+          setClipsVersion((v) => v + 1);
+          setActiveTab("clips");
         }
       } catch {
         // Transient polling failure; keep waiting for the next tick.
@@ -136,7 +139,7 @@ export default function ResourceWorkspace() {
 
   // Subscribe to the live progress stream while a job is active.
   useEffect(() => {
-    if (jobStatus !== "PENDING" && jobStatus !== "PROCESSING") return undefined;
+    if (jobStatus !== "pending" && jobStatus !== "processing") return undefined;
     const listener = (msg) => {
       if (msg && msg.type === "event" && msg.data && msg.data.event === "progress" && msg.data.payload) {
         setProgressInfo(msg.data.payload);
@@ -163,6 +166,7 @@ export default function ResourceWorkspace() {
     try {
       const res = await startProcessing(mediaId);
       setJob(res);
+      setClipsVersion((v) => v + 1);
     } catch (err) {
       setError("Failed to start processing: " + (err.message || "Unknown error"));
     } finally {
@@ -177,7 +181,7 @@ export default function ResourceWorkspace() {
     { id: "content", label: "AI Content", icon: Sparkles },
   ];
 
-  const canProcess = (media?.status === "PENDING" || media?.status === "FAILED") && !hasActiveJob;
+  const canProcess = !hasActiveJob && media && (media.status === "processed" || media.status === "uploaded" || media.status === "error");
 
   return (
     <div className="resourceWorkspace">
@@ -301,7 +305,7 @@ export default function ResourceWorkspace() {
                       </div>
                     )}
 
-                    {jobStatus === "FAILED" && (
+                    {jobStatus === "failed" && (
                       <div className="processing__failed">
                         <AlertCircle size={18} />
                         <p className="processing__error">
@@ -310,10 +314,13 @@ export default function ResourceWorkspace() {
                       </div>
                     )}
 
-                    {jobStatus === "COMPLETED" && (
+                    {jobStatus === "completed" && (
                       <div className="processing__done">
                         <CheckCircle2 size={18} />
                         <span>Processing completed successfully.</span>
+                        <button className="btn btn--primary btn--sm" onClick={() => setActiveTab("clips")}>
+                          <Film size={14} /> View Clips
+                        </button>
                       </div>
                     )}
 
@@ -338,10 +345,9 @@ export default function ResourceWorkspace() {
                     )}
 
                     {!hasActiveJob &&
-                      jobStatus !== "FAILED" &&
-                      jobStatus !== "COMPLETED" &&
-                      media?.status !== "PENDING" &&
-                      media?.status !== "FAILED" && (
+                      jobStatus !== "failed" &&
+                      jobStatus !== "completed" &&
+                      !canProcess && (
                         <p className="processing__idle">No active processing job for this resource.</p>
                       )}
                   </div>
@@ -350,7 +356,7 @@ export default function ResourceWorkspace() {
             )}
 
             {activeTab === "transcript" && <TranscriptView mediaId={mediaId} />}
-            {activeTab === "clips" && <ClipsView projectId={projectId} mediaId={mediaId} />}
+            {activeTab === "clips" && <ClipsView key={clipsVersion} projectId={projectId} mediaId={mediaId} />}
             {activeTab === "content" && <ContentView mediaId={mediaId} />}
           </section>
         </>
@@ -653,7 +659,7 @@ function TranscriptView({ mediaId }) {
 
 function ClipVideo({ clip }) {
   const [videoUrl, setVideoUrl] = useState(null);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -668,8 +674,8 @@ function ClipVideo({ clip }) {
         objectUrl = url;
         setVideoUrl(url);
       })
-      .catch(() => {
-        if (active) setError(true);
+      .catch((err) => {
+        if (active) setError(err?.message || "Failed to load clip.");
       });
 
     return () => {
@@ -678,7 +684,7 @@ function ClipVideo({ clip }) {
     };
   }, [clip.id]);
 
-  if (error) return <div className="clipVideo__error">Failed to load video stream.</div>;
+  if (error) return <div className="clipVideo__error"><AlertCircle size={14} /> {error}</div>;
   if (!videoUrl) {
     return (
       <div className="clipVideo__loading">

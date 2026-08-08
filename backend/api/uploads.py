@@ -245,11 +245,17 @@ def stream_media(
             detail="Media file not found in storage.",
         )
 
-    filename = media.filename
-    media_type = "video/mp4" if filename.lower().endswith((".mp4", ".mov", ".avi", ".mkv", ".webm")) else "audio/mpeg"
+    raw_filename = media.filename
+    media_type = "video/mp4" if raw_filename.lower().endswith((".mp4", ".mov", ".avi", ".mkv", ".webm")) else "audio/mpeg"
     
+    # Use safe ASCII filename for Content-Disposition to avoid latin-1 encoding errors
+    safe_filename = raw_filename.encode("ascii", errors="ignore").decode("ascii").strip()
+    if not safe_filename:
+        ext = Path(raw_filename).suffix or ".mp4"
+        safe_filename = f"media_{media.id}{ext}"
+
     return StreamingResponse(
         storage.read_stream(media.storage_path),
         media_type=media_type,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'inline; filename="{safe_filename}"'},
     )
