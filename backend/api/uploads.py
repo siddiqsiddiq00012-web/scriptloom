@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import desc
 
 from backend.db.dependencies import get_db
 from backend.models.user import User
@@ -44,6 +45,42 @@ async def upload_media(
         project_id=project_id,
         file=file,
     )
+
+
+@router.get("/{project_id}/media")
+def list_project_media(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List all media items belonging to a project (ownership verified)."""
+    verify_project_ownership(project_id, current_user, db)
+
+    from backend.models.media import Media
+    media_items = (
+        db.query(Media)
+        .filter(Media.project_id == project_id)
+        .order_by(desc(Media.id))
+        .all()
+    )
+
+    return [
+        {
+            "id": m.id,
+            "project_id": m.project_id,
+            "filename": m.filename,
+            "storage_path": m.storage_path,
+            "file_size": m.file_size,
+            "status": m.status,
+            "duration": m.duration,
+            "width": m.width,
+            "height": m.height,
+            "codec": m.codec,
+            "bitrate": m.bitrate,
+            "fps": m.fps,
+        }
+        for m in media_items
+    ]
 
 
 @router.get("/media/{media_id}")
@@ -208,11 +245,17 @@ def stream_media(
             detail="Media file not found in storage.",
         )
 
-    filename = media.filename
-    media_type = "video/mp4" if filename.lower().endswith((".mp4", ".mov", ".avi", ".mkv", ".webm")) else "audio/mpeg"
+    raw_filename = media.filename
+    media_type = "video/mp4" if raw_filename.lower().endswith((".mp4", ".mov", ".avi", ".mkv", ".webm")) else "audio/mpeg"
     
+    # Use safe ASCII filename for Content-Disposition to avoid latin-1 encoding errors
+    safe_filename = raw_filename.encode("ascii", errors="ignore").decode("ascii").strip()
+    if not safe_filename:
+        ext = Path(raw_filename).suffix or ".mp4"
+        safe_filename = f"media_{media.id}{ext}"
+
     return StreamingResponse(
         storage.read_stream(media.storage_path),
         media_type=media_type,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'inline; filename="{safe_filename}"'},
     )

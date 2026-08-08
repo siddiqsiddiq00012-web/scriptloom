@@ -7,6 +7,10 @@ export async function uploadMediaFile(projectId, file) {
   return await api.post(`/projects/${projectId}/media`, formData);
 }
 
+export async function getProjectMedia(projectId) {
+  return await api.get(`/projects/${projectId}/media`);
+}
+
 export async function getMediaDetails(mediaId) {
   return await api.get(`/projects/media/${mediaId}`);
 }

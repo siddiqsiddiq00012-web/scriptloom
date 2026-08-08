@@ -1,6 +1,7 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from google.oauth2 import id_token
 from google.auth.transport import requests
 
@@ -35,7 +36,14 @@ def register(
     user: UserRegister,
     db: Session = Depends(get_db),
 ):
-    result = AuthService(db).register(user)
+    try:
+        result = AuthService(db).register(user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered.",
+        )
 
     if result is None:
         raise HTTPException(

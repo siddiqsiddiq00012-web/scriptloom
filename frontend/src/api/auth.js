@@ -7,7 +7,6 @@ export async function registerUser(name, email, password) {
   const data = await api.post("/auth/register", { name: name || email.split("@")[0], email, password });
   if (data.access_token) {
     localStorage.setItem("token", data.access_token);
-    localStorage.setItem("scriptloom_auth_token", data.access_token);
     localStorage.setItem("user_email", data.user?.email || email);
     localStorage.setItem("user_name", data.user?.name || name || email.split("@")[0]);
   }
@@ -21,7 +20,6 @@ export async function loginUser(email, password) {
   const data = await api.post("/auth/login", { email, password });
   if (data.access_token) {
     localStorage.setItem("token", data.access_token);
-    localStorage.setItem("scriptloom_auth_token", data.access_token);
     if (data.user) {
       localStorage.setItem("user_email", data.user.email || email);
       localStorage.setItem("user_name", data.user.name || email.split("@")[0]);
@@ -31,23 +29,17 @@ export async function loginUser(email, password) {
   return data;
 }
 
-export async function loginWithGoogle(email, name, avatarUrl) {
-  if (!email) {
-    throw new Error("Please enter your Gmail address to sign in with Google.");
+export async function loginWithGoogle(credential) {
+  if (!credential) {
+    throw new Error("Google credential is required.");
   }
 
-  const targetName = name || email.split("@")[0];
-  const targetAvatar = avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80";
-
   const data = await api.post("/auth/google", {
-    email,
-    name: targetName,
-    avatar_url: targetAvatar,
+    credential: credential
   });
 
   if (data.access_token) {
     localStorage.setItem("token", data.access_token);
-    localStorage.setItem("scriptloom_auth_token", data.access_token);
     if (data.user) {
       localStorage.setItem("user_email", data.user.email);
       localStorage.setItem("user_name", data.user.name);
@@ -58,7 +50,7 @@ export async function loginWithGoogle(email, name, avatarUrl) {
 }
 
 export function isAuthenticated() {
-  return !!(localStorage.getItem("token") || localStorage.getItem("scriptloom_auth_token"));
+  return !!localStorage.getItem("token");
 }
 
 export function getUserProfile() {
@@ -82,7 +74,6 @@ export function getUserProfile() {
 
 export function logoutUser() {
   localStorage.removeItem("token");
-  localStorage.removeItem("scriptloom_auth_token");
   localStorage.removeItem("user_email");
   localStorage.removeItem("user_name");
   localStorage.removeItem("user_avatar");
@@ -97,7 +88,7 @@ export async function getCurrentUser() {
       if (user.avatar_url) localStorage.setItem("user_avatar", user.avatar_url);
     }
     return user;
-  } catch (err) {
+  } catch {
     return null;
   }
 }

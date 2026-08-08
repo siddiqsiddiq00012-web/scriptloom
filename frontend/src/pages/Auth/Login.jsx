@@ -1,8 +1,10 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "./Login.css";
 import { loginUser, loginWithGoogle } from "../../api/auth";
+import { api } from "../../api/client";
 import { ArrowRight, Lock, Mail, AlertCircle, CheckCircle2 } from "lucide-react";
+import GoogleLoginButton from "../../components/auth/GoogleLoginButton";
 
 function Login() {
   const navigate = useNavigate();
@@ -11,28 +13,16 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [showReset, setShowReset] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
-  const handleGoogleLogin = async () => {
-    let targetEmail = email;
-    if (!targetEmail) {
-      targetEmail = window.prompt("Enter your Gmail address to sign in with Google:", "creator@gmail.com");
-    }
-    if (!targetEmail) return;
-
-    const name = targetEmail.split("@")[0].replace(".", " ");
-    const formattedName = name.charAt(0).toUpperCase() + name.slice(1);
-
+  const handleGoogleSuccess = async (accessToken) => {
     setLoading(true);
     setError("");
-
     try {
-      await loginWithGoogle(
-        targetEmail,
-        formattedName,
-        "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80"
-      );
-      setSuccess(true);
-      setTimeout(() => navigate("/dashboard"), 500);
+      await loginWithGoogle(accessToken);
+      navigate("/dashboard");
     } catch (err) {
       setError(err.message || "Google authentication failed.");
     } finally {
@@ -49,17 +39,39 @@ function Login() {
 
     setLoading(true);
     setError("");
+    setSuccess(false);
 
     try {
       await loginUser(email, password);
-      setSuccess(true);
-      setTimeout(() => {
-        navigate("/dashboard");
-      }, 600);
+      navigate("/dashboard");
     } catch (err) {
-      setError(err.message || "Authentication failed. Please check your credentials.");
+      const msg = err.message || "Authentication failed. Please check your credentials.";
+      if (err.status === 401) {
+        setError("Invalid email or password. Double-check your credentials, or create a new account if you haven't registered.");
+      } else if (err.status === 429) {
+        setError("Too many login attempts. Please wait a minute and try again.");
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    if (!resetEmail) return;
+    setResetLoading(true);
+    setError("");
+    try {
+      await api.post("/auth/forgot-password", { email: resetEmail });
+      setSuccess(true);
+      setShowReset(false);
+    } catch {
+      setSuccess(true);
+      setShowReset(false);
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -74,8 +86,8 @@ function Login() {
         </Link>
 
         <div className="authCard__header">
-          <h3>Welcome Back to Scriptloom</h3>
-          <p>AI Content OS & Personal Brand Engine for Knowledge Creators</p>
+          <h3>Welcome Back</h3>
+          <p>Sign in to access your content studio.</p>
         </div>
 
         {error && (
@@ -85,23 +97,15 @@ function Login() {
           </div>
         )}
 
-        {success && (
+        {success && !showReset && (
           <div className="authCard__alert authCard__alert--success">
             <CheckCircle2 size={16} />
-            <span>Authenticated! Redirecting to OS Workspace...</span>
+            <span>If that email is registered, a password reset link has been sent.</span>
           </div>
         )}
 
-        {/* Google SSO Button */}
-        <button type="button" className="authCard__googleBtn" onClick={handleGoogleLogin}>
-          <svg width="18" height="18" viewBox="0 0 18 18">
-            <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.259h2.908c1.702-1.567 2.684-3.874 2.684-6.617z" />
-            <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" />
-            <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" />
-            <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" />
-          </svg>
-          <span>Continue with Google / Gmail</span>
-        </button>
+        {/* Google SSO — error-boundary isolated so it can't break email login */}
+        <GoogleLoginButton onSuccess={handleGoogleSuccess} onError={setError} loading={loading} />
 
         <div className="authCard__divider">
           <span>or sign in with email</span>
@@ -109,12 +113,12 @@ function Login() {
 
         <form onSubmit={handleSubmit} className="authCard__form">
           <div className="authCard__inputGroup">
-            <label>Work Email</label>
+            <label>Email</label>
             <div className="authCard__inputWrapper">
               <Mail size={16} className="authCard__inputIcon" />
               <input
                 type="email"
-                placeholder="creator@gmail.com"
+                placeholder="you@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -137,10 +141,42 @@ function Login() {
           </div>
 
           <button type="submit" className="authCard__submitBtn" disabled={loading}>
-            <span>{loading ? "Authenticating..." : "Sign In to OS Workspace"}</span>
+            <span>{loading ? "Signing in..." : "Sign In"}</span>
             <ArrowRight size={16} />
           </button>
         </form>
+
+        {showReset ? (
+          <form onSubmit={handleForgotPassword} className="authCard__form" style={{ marginTop: "16px" }}>
+            <div className="authCard__inputGroup">
+              <label>Reset Password</label>
+              <div className="authCard__inputWrapper">
+                <Mail size={16} className="authCard__inputIcon" />
+                <input
+                  type="email"
+                  placeholder="you@company.com"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+            <div className="authCard__row">
+              <button type="submit" className="authCard__submitBtn" disabled={resetLoading}>
+                <span>{resetLoading ? "Sending..." : "Send Reset Link"}</span>
+              </button>
+              <button type="button" className="authCard__submitBtn authCard__submitBtn--ghost" onClick={() => setShowReset(false)}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="authCard__forgotRow">
+            <button type="button" className="authCard__forgotBtn" onClick={() => { setShowReset(true); setResetEmail(email); setError(""); }}>
+              Forgot password?
+            </button>
+          </div>
+        )}
 
         <div className="authCard__footer">
           <p>

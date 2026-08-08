@@ -81,16 +81,7 @@ class FFprobeService:
                     fps=None,
                 )
 
-        except Exception:
-            # Fallback estimation if ffprobe fails or is not in PATH
-            file_size = os.path.getsize(file_path_str) if os.path.exists(file_path_str) else 0
-            # Rough estimation: 1 MB approx 10s audio
-            estimated_duration = max(1.0, float(file_size) / (100 * 1024))
-            return VideoMetadata(
-                duration=round(estimated_duration, 2),
-                width=None,
-                height=None,
-                codec="fallback",
-                bitrate=128000,
-                fps=None,
-            )
+        except Exception as e:
+            raise RuntimeError(
+                f"ffprobe failed to extract metadata for '{file_path_str}': {e}"
+            ) from e

@@ -12,6 +12,14 @@ router = APIRouter(
 )
 
 
+def _safe_header(filename: str) -> str:
+    """Return a Content-Disposition header value safe for latin-1 encoding."""
+    safe = filename.encode("ascii", errors="ignore").decode("ascii").strip()
+    if not safe:
+        safe = "download"
+    return f'attachment; filename="{safe}"'
+
+
 @router.get("/content/{content_id}")
 def export_single_asset(
     content_id: int,
@@ -32,7 +40,7 @@ def export_single_asset(
             content=content_bytes,
             media_type=media_type,
             headers={
-                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Disposition": _safe_header(filename),
             },
         )
     except ValueError as val_err:
@@ -58,7 +66,7 @@ def export_campaign_zip(
             content=zip_bytes,
             media_type=media_type,
             headers={
-                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Disposition": _safe_header(filename),
             },
         )
     except ValueError as val_err:

@@ -91,7 +91,7 @@ class ProgressStreamService {
     if (this.activeReader) {
       try {
         this.activeReader.cancel();
-      } catch (e) {}
+      } catch { /* reader already cancelled */ }
       this.activeReader = null;
     }
     if (this.reconnectTimeout) {

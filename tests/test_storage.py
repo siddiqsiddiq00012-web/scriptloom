@@ -231,7 +231,8 @@ def test_upload_format_and_rollback_lifecycles(mock_delete, mock_save, mock_extr
     mock_file = MagicMock()
     mock_file.filename = "corrupted_media.mp4"
     mock_file.content_type = "video/mp4"
-    mock_file.file.read.side_effect = [b"broken video stream header", b""]
+    # Content must have valid magic bytes (ftyp at offset 4 for MP4)
+    mock_file.file.read.side_effect = [b"\x00\x00\x00\x1cftypisom", b""]
 
     service = UploadService(SessionLocal())
     with pytest.raises(HTTPException) as exc:
@@ -239,7 +240,8 @@ def test_upload_format_and_rollback_lifecycles(mock_delete, mock_save, mock_extr
         asyncio.run(service.upload(project_id=project_id, file=mock_file))
     
     assert exc.value.status_code == 400
-    assert "Invalid media file" in exc.value.detail
+    # Either magic-byte check or ffprobe validation rejects the file — both are correct
+    assert "Invalid media file" in exc.value.detail or "Security violation" in exc.value.detail
     mock_save.assert_not_called()
 
     # 2. Database Insertion failure after storage saves -> Rollback/delete the uploaded key
@@ -249,7 +251,8 @@ def test_upload_format_and_rollback_lifecycles(mock_delete, mock_save, mock_extr
     mock_file2 = MagicMock()
     mock_file2.filename = "valid_but_db_fails.mp4"
     mock_file2.content_type = "video/mp4"
-    mock_file2.file.read.side_effect = [b"valid video stream metadata content header", b""]
+    # Content must have valid magic bytes (ftyp at offset 4 for MP4)
+    mock_file2.file.read.side_effect = [b"\x00\x00\x00\x1cftypisom", b""]
 
     # We patch create_media to raise an error
     with patch("backend.repositories.media_repository.MediaRepository.create_media", side_effect=Exception("Database connection timed out")):

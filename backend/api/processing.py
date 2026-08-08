@@ -1,6 +1,7 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError
 
 from backend.core.dependencies import get_current_user, verify_media_ownership
@@ -8,7 +9,7 @@ from backend.db.dependencies import get_db
 from backend.models.user import User
 from backend.models.media import Media
 from backend.models.project import Project
-from backend.models.processing_job import JobStatus
+from backend.models.processing_job import JobStatus, ProcessingJob
 from backend.processing.jobs.manager import job_manager
 from backend.schemas.processing import ProcessingRequest
 from backend.jobs.tasks.video_processing import process_video as process_video_task
@@ -102,6 +103,69 @@ def get_job(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Job not found.",
+        )
+
+    return {
+        "job_id": job.job_id,
+        "media_id": job.media_id,
+        "user_id": job.user_id,
+        "status": job.status,
+        "error_message": job.error_message,
+        "created_at": job.created_at,
+        "updated_at": job.updated_at,
+    }
+
+@router.get("/jobs")
+def list_user_jobs(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List all processing jobs for the current user."""
+    jobs = (
+        db.query(ProcessingJob)
+        .filter(ProcessingJob.user_id == current_user.id)
+        .order_by(desc(ProcessingJob.created_at))
+        .limit(50)
+        .all()
+    )
+    return [
+        {
+            "job_id": job.job_id,
+            "media_id": job.media_id,
+            "user_id": job.user_id,
+            "filename": job.filename,
+            "status": job.status,
+            "error_message": job.error_message,
+            "created_at": job.created_at,
+            "updated_at": job.updated_at,
+        }
+        for job in jobs
+    ]
+
+@router.get("/media/{media_id}/jobs/latest")
+def get_latest_job_for_media(
+    media_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get the most recent processing job for a specific media resource.
+    """
+    # 1. Verify media ownership
+    verify_media_ownership(media_id, current_user, db)
+
+    # 2. Query the latest job for this media
+    job = (
+        db.query(ProcessingJob)
+        .filter(ProcessingJob.media_id == media_id)
+        .order_by(desc(ProcessingJob.created_at))
+        .first()
+    )
+
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No processing jobs found for this media.",
         )
 
     return {

@@ -16,6 +16,15 @@ class ExportEngine:
     def __init__(self, db: Session):
         self.db = db
 
+    def _parse_body_json(self, asset) -> any:
+        """Safely parse body_json, returning the raw string on failure."""
+        try:
+            if asset.body_json.startswith(("[", "{")):
+                return json.loads(asset.body_json)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+        return asset.body_json
+
     def export_single_content(self, content_id: int, format_type: str = "markdown") -> tuple[str, bytes, str]:
         asset = self.db.query(GeneratedContent).filter(GeneratedContent.id == content_id).first()
         if not asset:
@@ -30,7 +39,7 @@ class ExportEngine:
             media_type = "application/json"
         elif fmt in ("txt", "text"):
             filename = f"{title_slug}.txt"
-            raw_body = json.loads(asset.body_json) if asset.body_json.startswith(("[", "{")) else asset.body_json
+            raw_body = self._parse_body_json(asset)
             if isinstance(raw_body, list):
                 text_str = "\n\n".join([str(item) for item in raw_body])
             elif isinstance(raw_body, dict):
@@ -42,7 +51,7 @@ class ExportEngine:
         else:
             # Default to Markdown (.md)
             filename = f"{title_slug}.md"
-            raw_body = json.loads(asset.body_json) if asset.body_json.startswith(("[", "{")) else asset.body_json
+            raw_body = self._parse_body_json(asset)
             if isinstance(raw_body, dict) and "markdown" in raw_body:
                 md_text = raw_body["markdown"]
             elif isinstance(raw_body, list):
