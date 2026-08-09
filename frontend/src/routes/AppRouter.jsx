@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import LandingPage from "../pages/Landing/LandingPage";
 import Login from "../pages/Auth/Login";
 import Register from "../pages/Auth/Register";
+import ResetPassword from "../pages/Auth/ResetPassword";
 import Dashboard from "../pages/App/Dashboard";
 import ProjectDetail from "../pages/App/ProjectDetail";
 import BillingPage from "../pages/Billing/BillingPage";
@@ -20,6 +21,7 @@ function AppRouter() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         
         <Route path="/dashboard" element={
           <ProtectedRoute>

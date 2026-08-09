@@ -376,9 +376,8 @@ function MediaPreview({ media }) {
     let active = true;
     let objectUrl = null;
 
-    const token = localStorage.getItem("token");
     fetch(`${config.apiUrl}/projects/media/${media.id}/stream`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: "include",
     })
       .then((res) => {
         if (!res.ok) throw new Error("Stream unavailable");

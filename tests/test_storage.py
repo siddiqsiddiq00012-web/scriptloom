@@ -186,17 +186,76 @@ def test_storage_configuration_validation():
     )
     assert s1.STORAGE_BACKEND == "local"
 
-    # 2. R2 Mode requires all credentials, startup fails if missing
-    with pytest.raises(ValueError, match="Missing required R2 credentials"):
-        Settings(
-            DATABASE_URL="sqlite://",
-            SECRET_KEY="test_secret",
-            GEMINI_API_KEY="test_gemini",
-            GOOGLE_CLIENT_ID="test_google",
-            ALLOWED_ORIGINS="*",
-            STORAGE_BACKEND="r2",
-            R2_ENDPOINT_URL="",  # Missing
+    # 2. R2 Mode without credentials must NOT crash startup; the storage
+    #    manager falls back to Local Storage with a logged warning.
+    s2 = Settings(
+        DATABASE_URL="sqlite://",
+        SECRET_KEY="test_secret",
+        GEMINI_API_KEY="test_gemini",
+        GOOGLE_CLIENT_ID="test_google",
+        ALLOWED_ORIGINS="*",
+        STORAGE_BACKEND="r2",
+    )
+    assert s2.STORAGE_BACKEND == "r2"
+    assert s2.R2_ENDPOINT == ""
+
+
+def test_storage_manager_build():
+    from types import SimpleNamespace
+    from backend.storage.manager import build_storage
+    from backend.storage.local import LocalStorage
+    from backend.storage.r2 import R2Storage
+
+    def cfg(**kwargs):
+        defaults = dict(
+            STORAGE_BACKEND="local",
+            LOCAL_STORAGE_ROOT="media",
+            R2_ENDPOINT="",
+            R2_ACCOUNT_ID="",
+            R2_BUCKET_NAME="",
+            R2_ACCESS_KEY_ID="",
+            R2_SECRET_ACCESS_KEY="",
+            R2_PUBLIC_URL="",
         )
+        defaults.update(kwargs)
+        return SimpleNamespace(**defaults)
+
+    # Local backend -> LocalStorage
+    assert isinstance(build_storage(cfg()), LocalStorage)
+
+    # R2 backend with incomplete credentials -> fall back to LocalStorage
+    fallback = build_storage(cfg(STORAGE_BACKEND="r2"))
+    assert isinstance(fallback, LocalStorage)
+
+    # R2 backend with only an account id -> derived endpoint + R2Storage
+    derived = build_storage(
+        cfg(
+            STORAGE_BACKEND="r2",
+            R2_ACCOUNT_ID="acct123",
+            R2_BUCKET_NAME="bucket",
+            R2_ACCESS_KEY_ID="key",
+            R2_SECRET_ACCESS_KEY="secret",
+        )
+    )
+    assert isinstance(derived, R2Storage)
+    assert derived.endpoint_url == "https://acct123.r2.cloudflarestorage.com"
+
+    # R2 backend with explicit endpoint -> R2Storage
+    complete = build_storage(
+        cfg(
+            STORAGE_BACKEND="r2",
+            R2_ENDPOINT="https://custom.endpoint.example.com",
+            R2_ACCOUNT_ID="acct123",
+            R2_BUCKET_NAME="bucket",
+            R2_ACCESS_KEY_ID="key",
+            R2_SECRET_ACCESS_KEY="secret",
+            R2_PUBLIC_URL="https://cdn.example.com/",
+        )
+    )
+    assert isinstance(complete, R2Storage)
+    assert complete.endpoint_url == "https://custom.endpoint.example.com"
+    assert complete.public_url_for("projects/1/clips/a.mp4") == "https://cdn.example.com/projects/1/clips/a.mp4"
+    assert complete.public_url_for("x.mp4") == "https://cdn.example.com/x.mp4"
 
 
 # 6. UPLOAD FORMAT VALIDATION & DB FAILURE ROLLBACK

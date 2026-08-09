@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "./Login.css";
-import { loginUser, loginWithGoogle } from "../../api/auth";
-import { api } from "../../api/client";
+import { loginUser, loginWithGoogle, forgotPassword } from "../../api/auth";
 import { ArrowRight, Lock, Mail, AlertCircle, CheckCircle2 } from "lucide-react";
 import GoogleLoginButton from "../../components/auth/GoogleLoginButton";
 
@@ -65,13 +64,15 @@ function Login() {
     setError("");
     setSuccess(false);
     try {
-      await api.post("/auth/forgot-password", { email: resetEmail });
+      await forgotPassword(resetEmail);
       setSuccess(true);
       setShowReset(false);
     } catch (err) {
-      const msg = err?.message || "Password reset is not yet available.";
-      setError(msg);
-      setShowReset(false);
+      if (err.status === 429) {
+        setError("Too many requests. Please wait a minute and try again.");
+      } else {
+        setError(err?.message || "Something went wrong. Please try again.");
+      }
     } finally {
       setResetLoading(false);
     }
@@ -102,7 +103,7 @@ function Login() {
         {success && !showReset && (
           <div className="authCard__alert authCard__alert--success">
             <CheckCircle2 size={16} />
-            <span>Password reset is not yet available. Please contact support@scriptloom.com for account recovery.</span>
+            <span>If an account exists for that email, a password reset link has been sent.</span>
           </div>
         )}
 

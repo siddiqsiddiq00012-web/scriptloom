@@ -56,6 +56,11 @@ class PasswordResetRequest(BaseModel):
     email: EmailStr
 
 
+class PasswordResetConfirmRequest(BaseModel):
+    token: str = Field(..., min_length=20)
+    new_password: str = Field(..., min_length=6)
+
+
 class TokenRefreshRequest(BaseModel):
     refresh_token: str
 

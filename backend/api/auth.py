@@ -11,6 +11,7 @@ from backend.core.dependencies import get_current_user
 from backend.db.dependencies import get_db
 from backend.models.user import User
 from backend.schemas.auth import (
+    PasswordResetConfirmRequest,
     PasswordResetRequest,
     TokenRefreshRequest,
     TokenResponse,
@@ -20,6 +21,8 @@ from backend.schemas.auth import (
     GoogleAuthRequest,
 )
 from backend.services.auth_service import AuthService
+from backend.services.email_service import EmailDeliveryError
+from backend.services.password_reset_service import PasswordResetService
 
 logger = logging.getLogger("scriptloom.auth")
 
@@ -96,7 +99,7 @@ def get_csrf_token(response: Response):
 )
 def logout(response: Response):
     _clear_auth_cookie(response)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return None
 
 
 @router.post(
@@ -191,16 +194,44 @@ def me(
 
 @router.post(
     "/forgot-password",
-    status_code=status.HTTP_501_NOT_IMPLEMENTED,
+    status_code=status.HTTP_200_OK,
 )
 def forgot_password(
     data: PasswordResetRequest,
     db: Session = Depends(get_db),
 ):
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Password reset is not yet available. Please contact support@scriptloom.com for account recovery.",
+    try:
+        PasswordResetService(db).request_reset(data.email)
+    except EmailDeliveryError as e:
+        # Deliberately generic: the response must not reveal whether an
+        # account exists for the given email (anti-enumeration).
+        logger.error(f"Password reset request failed: {e}")
+    return {
+        "message": (
+            "If an account exists for that email, a password reset link "
+            "has been sent."
+        )
+    }
+
+
+@router.post(
+    "/reset-password",
+    status_code=status.HTTP_200_OK,
+)
+def reset_password(
+    data: PasswordResetConfirmRequest,
+    db: Session = Depends(get_db),
+):
+    success = PasswordResetService(db).reset_password(
+        data.token,
+        data.new_password,
     )
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This password reset link is invalid or has expired.",
+        )
+    return {"message": "Your password has been updated. Please sign in."}
 
 
 @router.post(

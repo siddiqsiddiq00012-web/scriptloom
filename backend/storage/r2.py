@@ -42,6 +42,8 @@ class R2Storage(StorageProvider):
         bucket_name: str,
         access_key_id: str,
         secret_access_key: str,
+        account_id: str = "",
+        public_url: str = "",
     ):
         self.s3_client = boto3.client(
             "s3",
@@ -51,6 +53,15 @@ class R2Storage(StorageProvider):
             config=Config(signature_version="s3v4"),
         )
         self.bucket_name = bucket_name
+        self.endpoint_url = endpoint_url
+        self.account_id = account_id
+        self.public_url = public_url
+
+    def public_url_for(self, key: str) -> str | None:
+        """Absolute public URL for the given key, or None when no public URL is configured."""
+        if not self.public_url:
+            return None
+        return f"{self.public_url.rstrip('/')}/{key.lstrip('/')}"
 
     def save_stream(self, key: str, stream: Iterator[bytes], size: int) -> None:
         validate_storage_key(key)

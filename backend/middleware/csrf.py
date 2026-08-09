@@ -18,6 +18,8 @@ _CSRF_EXEMPT_PREFIXES = (
     "/api/v1/auth/google",
     "/api/v1/auth/logout",
     "/api/v1/auth/csrf-token",
+    "/api/v1/auth/forgot-password",
+    "/api/v1/auth/reset-password",
     "/api/v1/webhooks",
     "/api/v1/billing/webhook",
 )

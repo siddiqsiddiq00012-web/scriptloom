@@ -31,6 +31,20 @@ export async function loginWithGoogle(credential) {
   return data;
 }
 
+export async function forgotPassword(email) {
+  if (!email) {
+    throw new Error("Email is required.");
+  }
+  return api.post("/auth/forgot-password", { email });
+}
+
+export async function resetPassword(token, newPassword) {
+  if (!token || !newPassword) {
+    throw new Error("Reset token and new password are required.");
+  }
+  return api.post("/auth/reset-password", { token, new_password: newPassword });
+}
+
 function storeUserProfile(user, fallbackEmail, fallbackName) {
   // The JWT now lives in an httpOnly cookie; only non-sensitive profile
   // metadata is mirrored to localStorage for quick display.

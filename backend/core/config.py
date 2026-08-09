@@ -1,6 +1,6 @@
 import sys
 from typing import Any
-from pydantic import ValidationError, field_validator
+from pydantic import AliasChoices, Field, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -73,16 +73,36 @@ class Settings(BaseSettings):
     # Storage Backend Configuration
     STORAGE_BACKEND: str = "local"
     LOCAL_STORAGE_ROOT: str = "media"
-    R2_ENDPOINT_URL: str = ""
+    # R2_ENDPOINT_URL is accepted as a legacy alias for R2_ENDPOINT.
+    R2_ENDPOINT: str = Field(
+        default="",
+        validation_alias=AliasChoices("R2_ENDPOINT", "R2_ENDPOINT_URL"),
+    )
+    R2_ACCOUNT_ID: str = ""
     R2_BUCKET_NAME: str = ""
     R2_ACCESS_KEY_ID: str = ""
     R2_SECRET_ACCESS_KEY: str = ""
+    # Optional public base URL for direct asset access (R2 Public Bucket / custom domain)
+    R2_PUBLIC_URL: str = ""
 
     STRIPE_PUBLISHABLE_KEY: str = ""
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
     STRIPE_PRICE_PRO_MONTHLY: str = ""
     STRIPE_PRICE_PRO_ANNUAL: str = ""
+
+    # Email (password reset) configuration
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = ""
+    SMTP_FROM_NAME: str = "Scriptloom"
+    SMTP_USE_TLS: bool = True
+
+    # Public frontend URL used to build password-reset links in emails
+    FRONTEND_URL: str = "http://localhost:5173"
+    PASSWORD_RESET_TOKEN_TTL_MINUTES: int = 10
 
     @field_validator("STORAGE_BACKEND")
     @classmethod
@@ -92,30 +112,20 @@ class Settings(BaseSettings):
             raise ValueError("STORAGE_BACKEND must be either 'local' or 'r2'")
         return v_lower
 
-    from pydantic import model_validator
     @model_validator(mode="after")
     def validate_storage_settings(self) -> "Settings":
         backend = self.STORAGE_BACKEND.lower()
-        if backend == "r2":
-            missing = []
-            if not self.R2_ENDPOINT_URL:
-                missing.append("R2_ENDPOINT_URL")
-            if not self.R2_BUCKET_NAME:
-                missing.append("R2_BUCKET_NAME")
-            if not self.R2_ACCESS_KEY_ID:
-                missing.append("R2_ACCESS_KEY_ID")
-            if not self.R2_SECRET_ACCESS_KEY:
-                missing.append("R2_SECRET_ACCESS_KEY")
-            if missing:
-                raise ValueError(f"Missing required R2 credentials when STORAGE_BACKEND is 'r2': {', '.join(missing)}")
-        elif backend == "local":
-            if not self.LOCAL_STORAGE_ROOT:
-                raise ValueError("LOCAL_STORAGE_ROOT must be set when STORAGE_BACKEND is 'local'")
+        if backend == "local" and not self.LOCAL_STORAGE_ROOT:
+            raise ValueError("LOCAL_STORAGE_ROOT must be set when STORAGE_BACKEND is 'local'")
+        # When STORAGE_BACKEND is 'r2' but credentials are absent, startup must
+        # not crash: backend/storage/manager.py falls back to Local Storage and
+        # logs an informative warning.
         return self
 
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",
+        populate_by_name=True,
     )
 
 
