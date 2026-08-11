@@ -22,7 +22,7 @@ def test_google_auth_success():
         }
         with patch("google.oauth2.id_token.verify_oauth2_token", return_value=mock_id_info) as mock_verify:
             response = client.post(
-                "/auth/google",
+                "api/v1/auth/google",
                 json={"credential": "mock_google_token"}
             )
             assert response.status_code == 200
@@ -40,7 +40,7 @@ def test_google_auth_success():
 def test_google_auth_missing_client_id():
     with patch.object(settings, "GOOGLE_CLIENT_ID", ""):
         response = client.post(
-            "/auth/google",
+            "api/v1/auth/google",
             json={"credential": "mock_google_token"}
         )
         assert response.status_code == 500
@@ -49,7 +49,7 @@ def test_google_auth_missing_client_id():
 def test_google_auth_missing_token():
     with patch.object(settings, "GOOGLE_CLIENT_ID", "test_client_id"):
         response = client.post(
-            "/auth/google",
+            "api/v1/auth/google",
             json={"id_token": None, "token": None, "credential": None}
         )
         assert response.status_code == 400
@@ -59,7 +59,7 @@ def test_google_auth_verification_failed():
     with patch.object(settings, "GOOGLE_CLIENT_ID", "test_client_id"):
         with patch("google.oauth2.id_token.verify_oauth2_token", side_effect=ValueError("Token expired")):
             response = client.post(
-                "/auth/google",
+                "api/v1/auth/google",
                 json={"credential": "expired_token"}
             )
             assert response.status_code == 401
@@ -75,7 +75,7 @@ def test_google_auth_invalid_issuer():
         }
         with patch("google.oauth2.id_token.verify_oauth2_token", return_value=mock_id_info):
             response = client.post(
-                "/auth/google",
+                "api/v1/auth/google",
                 json={"credential": "mock_token"}
             )
             assert response.status_code == 401
@@ -91,7 +91,7 @@ def test_google_auth_unverified_email():
         }
         with patch("google.oauth2.id_token.verify_oauth2_token", return_value=mock_id_info):
             response = client.post(
-                "/auth/google",
+                "api/v1/auth/google",
                 json={"credential": "mock_token"}
             )
             assert response.status_code == 401
@@ -106,7 +106,7 @@ def test_google_auth_missing_email_claim():
         }
         with patch("google.oauth2.id_token.verify_oauth2_token", return_value=mock_id_info):
             response = client.post(
-                "/auth/google",
+                "api/v1/auth/google",
                 json={"credential": "mock_token"}
             )
             assert response.status_code == 401
@@ -123,7 +123,7 @@ def test_google_auth_ignore_frontend_injected_claims():
         }
         with patch("google.oauth2.id_token.verify_oauth2_token", return_value=mock_id_info):
             response = client.post(
-                "/auth/google",
+                "api/v1/auth/google",
                 json={
                     "credential": "mock_token",
                     "email": "hacker@gmail.com",

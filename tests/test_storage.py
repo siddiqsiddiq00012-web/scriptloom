@@ -444,7 +444,7 @@ def test_safe_deletion_ordering_integrity():
     with patch("backend.storage.manager.storage.exists", return_value=True), \
          patch("backend.storage.manager.storage.delete", side_effect=RuntimeError("Cloudflare S3 boundary connection error")):
          
-         response = client.delete(f"/projects/media/{media_id}", headers=headers)
+         response = client.delete(f"/api/v1/projects/media/{media_id}", headers=headers)
          assert response.status_code == 500
          assert "Failed to delete associated storage objects" in response.json()["detail"]
 

@@ -777,6 +777,36 @@
   color: #64748b;
 }
 
+/* Clips Tab Actions ------------------------------------------------ */
+.clipsTab {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.clipsTab__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.clipsTab__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4f46e5;
+}
+
+.clipsTab__status--done {
+  color: #059669;
+}
+
+.clipsTab__status--error {
+  color: #dc2626;
+}
+
 /* AI Content ------------------------------------------------------- */
 .contentView {
   display: flex;

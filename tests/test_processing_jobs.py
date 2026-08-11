@@ -118,12 +118,12 @@ def test_api_duplicate_job_returns_409():
 
     # First request: starts job
     with patch("backend.jobs.tasks.video_processing.process_video.delay") as mock_delay:
-        resp1 = client.post("/processing/process", json={"media_id": media_id}, headers=headers)
+        resp1 = client.post("/api/v1/processing/process", json={"media_id": media_id}, headers=headers)
         assert resp1.status_code == 200
         mock_delay.assert_called_once()
 
     # Second request: active job running -> returns 409 Conflict
-    resp2 = client.post("/processing/process", json={"media_id": media_id}, headers=headers)
+    resp2 = client.post("/api/v1/processing/process", json={"media_id": media_id}, headers=headers)
     assert resp2.status_code == 409
     assert "An active processing job is already running" in resp2.json()["detail"]
 
@@ -145,17 +145,17 @@ def test_job_authorization_checks():
     token_b = create_access_token({"sub": str(user_b_id)})
 
     # User A queries their own job -> Success
-    resp_a = client.get(f"/processing/jobs/{job_a_id}", headers={"Authorization": f"Bearer {token_a}"})
+    resp_a = client.get(f"/api/v1/processing/jobs/{job_a_id}", headers={"Authorization": f"Bearer {token_a}"})
     assert resp_a.status_code == 200
     assert resp_a.json()["status"] == "pending"
 
     # User B queries User A's job -> 404 (sanitized resource boundary protection)
-    resp_b = client.get(f"/processing/jobs/{job_a_id}", headers={"Authorization": f"Bearer {token_b}"})
+    resp_b = client.get(f"/api/v1/processing/jobs/{job_a_id}", headers={"Authorization": f"Bearer {token_b}"})
     assert resp_b.status_code == 404
     assert resp_b.json()["detail"] == "Job not found."
 
     # Anonymous user -> 401 Unauthorized
-    resp_anon = client.get(f"/processing/jobs/{job_a_id}")
+    resp_anon = client.get(f"/api/v1/processing/jobs/{job_a_id}")
     assert resp_anon.status_code == 401
 
 
@@ -171,7 +171,7 @@ def test_api_dispatch_failure_compensation(mock_delay):
     token = create_access_token({"sub": str(user_id)})
     headers = {"Authorization": f"Bearer {token}"}
 
-    resp = client.post("/processing/process", json={"media_id": media_id}, headers=headers)
+    resp = client.post("/api/v1/processing/process", json={"media_id": media_id}, headers=headers)
     assert resp.status_code == 500
     assert "Failed to queue the media processing task" in resp.json()["detail"]
 

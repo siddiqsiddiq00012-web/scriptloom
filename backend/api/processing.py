@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -17,6 +18,28 @@ from backend.services.billing_service import BillingService
 from backend.services.feature_gate import Feature
 
 logger = logging.getLogger(__name__)
+
+STUCK_JOB_TIMEOUT_MINUTES = 30
+
+
+def _mark_stuck_job_if_needed(db: Session, job: ProcessingJob) -> None:
+    if job.status not in (JobStatus.PENDING, JobStatus.PROCESSING):
+        return
+    now = datetime.now(timezone.utc)
+    updated_at = job.updated_at
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=timezone.utc)
+    if (now - updated_at) > timedelta(minutes=STUCK_JOB_TIMEOUT_MINUTES):
+        job.status = JobStatus.FAILED
+        job.error_message = (
+            "Processing timed out. The job was not picked up by a worker — "
+            "ensure the Celery worker is running."
+        )
+        db.commit()
+        logger.warning(
+            "Job %s stuck in %s for >%d min; marked FAILED.",
+            job.job_id, job.status.value, STUCK_JOB_TIMEOUT_MINUTES,
+        )
 
 router = APIRouter(
     prefix="/processing",
@@ -117,6 +140,8 @@ def get_job(
             detail="Job not found.",
         )
 
+    _mark_stuck_job_if_needed(db, job)
+
     return {
         "job_id": job.job_id,
         "media_id": job.media_id,
@@ -179,6 +204,8 @@ def get_latest_job_for_media(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No processing jobs found for this media.",
         )
+
+    _mark_stuck_job_if_needed(db, job)
 
     return {
         "job_id": job.job_id,

@@ -181,7 +181,7 @@ export default function ResourceWorkspace() {
     { id: "content", label: "AI Content", icon: Sparkles },
   ];
 
-  const canProcess = !hasActiveJob && media && (media.status === "processed" || media.status === "uploaded" || media.status === "error");
+  const canProcess = !hasActiveJob && media && (media.status === "processed" || media.status === "uploaded" || media.status === "error" || media.status === "transcribed");
 
   return (
     <div className="resourceWorkspace">
@@ -356,7 +356,43 @@ export default function ResourceWorkspace() {
             )}
 
             {activeTab === "transcript" && <TranscriptView mediaId={mediaId} />}
-            {activeTab === "clips" && <ClipsView key={clipsVersion} projectId={projectId} mediaId={mediaId} />}
+            {activeTab === "clips" && (
+              <div className="clipsTab">
+                <div className="clipsTab__actions">
+                  <button
+                    className="btn btn--primary"
+                    onClick={handleStartProcessing}
+                    disabled={isStarting || hasActiveJob}
+                  >
+                    {isStarting ? (
+                      <>
+                        <Loader2 className="lucide-spin" size={16} /> Starting…
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={16} /> Generate Clips
+                      </>
+                    )}
+                  </button>
+                  {hasActiveJob && (
+                    <span className="clipsTab__status">
+                      <Loader2 className="lucide-spin" size={14} /> Processing…
+                    </span>
+                  )}
+                  {jobStatus === "completed" && (
+                    <span className="clipsTab__status clipsTab__status--done">
+                      <CheckCircle2 size={14} /> Done
+                    </span>
+                  )}
+                  {jobStatus === "failed" && (
+                    <span className="clipsTab__status clipsTab__status--error">
+                      <AlertCircle size={14} /> Processing failed
+                    </span>
+                  )}
+                </div>
+                <ClipsView key={clipsVersion} projectId={projectId} mediaId={mediaId} />
+              </div>
+            )}
             {activeTab === "content" && <ContentView mediaId={mediaId} />}
           </section>
         </>
@@ -741,7 +777,10 @@ function ClipsView({ projectId, mediaId }) {
           <Film size={36} color="#4F46E5" />
         </div>
         <h3 className="emptyState__title">No clips yet</h3>
-        <p className="emptyState__text">Clips generated from this resource will appear here.</p>
+        <p className="emptyState__text">
+          Click "Generate Clips" above to run the processing pipeline, which will transcribe the audio, 
+          use AI to select the best moments, and extract short clips from this resource.
+        </p>
       </div>
     );
   }

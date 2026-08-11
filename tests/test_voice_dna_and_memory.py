@@ -38,7 +38,7 @@ def test_voice_dna_and_memory_flow():
     headers = {"Authorization": f"Bearer {token}"}
 
     print("\n--- 1. Fetching Voice DNA Profile ---")
-    dna_get = client.get("/voice-dna/me", headers=headers)
+    dna_get = client.get("/api/v1/voice-dna/me", headers=headers)
     print("Voice DNA Get Status:", dna_get.status_code)
     print("Voice DNA Get Output:", dna_get.json())
 
@@ -48,7 +48,7 @@ def test_voice_dna_and_memory_flow():
     print("\n--- 2. Updating Voice DNA Parameters ---")
     banned_words_test = "game-changer, synergy, paradigm shift, revolutionary, unleash"
     dna_update = client.put(
-        "/voice-dna/me",
+        "api/v1/voice-dna/me",
         json={
             "writing_style": "Direct, authoritative B2B founder perspective",
             "banned_words": banned_words_test,
@@ -73,7 +73,7 @@ def test_voice_dna_and_memory_flow():
     print("\n--- 4. Testing Media Upload & Transcription ---")
     dummy_wav_header = b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80\x3e\x00\x00\x00\x7d\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00"
     upload_res = client.post(
-        f"/projects/{project_id}/media",
+        f"api/v1/projects/{project_id}/media",
         files={"file": ("positioning_talk.wav", dummy_wav_header, "audio/wav")},
         headers=headers,
     )
@@ -83,10 +83,10 @@ def test_voice_dna_and_memory_flow():
     from unittest.mock import patch
     from tests.mock_stt_data import MOCK_STT_RESPONSE
     with patch("backend.processing.stt_engine.STTEngine.transcribe", return_value=MOCK_STT_RESPONSE):
-        client.post(f"/media/{media_id}/transcribe", headers=headers)
+        client.post(f"/api/v1/media/{media_id}/transcribe", headers=headers)
 
     print("\n--- 5. Indexing Media Transcript into Creator Memory RAG Store ---")
-    index_res = client.post(f"/creator-memory/index/{media_id}", headers=headers)
+    index_res = client.post(f"/api/v1/creator-memory/index/{media_id}", headers=headers)
     print("Memory Index Status:", index_res.status_code)
     print("Memory Index Output:", index_res.json())
 
@@ -95,7 +95,7 @@ def test_voice_dna_and_memory_flow():
 
     print("\n--- 6. Testing Semantic Vector Memory Search ---")
     search_res = client.post(
-        "/creator-memory/search",
+        "api/v1/creator-memory/search",
         json={
             "query": "authority positioning and campaign packs",
             "top_k": 3,

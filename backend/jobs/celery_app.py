@@ -1,3 +1,4 @@
+import platform
 from celery import Celery
 
 from backend.core.config import settings
@@ -14,6 +15,8 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    # On Windows the default prefork pool hangs; use solo instead.
+    worker_pool="solo" if platform.system() == "Windows" else "prefork",
 )
 
 # Explicitly import tasks so Celery always registers them.

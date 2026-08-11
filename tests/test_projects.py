@@ -35,7 +35,7 @@ def test_projects_endpoints_flow():
 
     # 1. POST /projects/ (Create project)
     create_response = client.post(
-        "/projects/",
+        "api/v1/projects/",
         json={"name": "New Test Project"},
         headers=headers,
     )
@@ -46,7 +46,7 @@ def test_projects_endpoints_flow():
 
     # 2. GET /projects/ (List projects)
     list_response = client.get(
-        "/projects/",
+        "api/v1/projects/",
         headers=headers,
     )
     assert list_response.status_code == 200
@@ -56,7 +56,7 @@ def test_projects_endpoints_flow():
 
     # 3. GET /projects/{project_id} (Get project details)
     get_response = client.get(
-        f"/projects/{project_id}",
+        f"api/v1/projects/{project_id}",
         headers=headers,
     )
     assert get_response.status_code == 200
@@ -64,7 +64,7 @@ def test_projects_endpoints_flow():
 
     # 4. PATCH /projects/{project_id} (Update project name)
     patch_response = client.patch(
-        f"/projects/{project_id}",
+        f"api/v1/projects/{project_id}",
         json={"name": "Updated Test Project Name"},
         headers=headers,
     )
@@ -73,14 +73,14 @@ def test_projects_endpoints_flow():
 
     # 5. DELETE /projects/{project_id} (Delete project)
     delete_response = client.delete(
-        f"/projects/{project_id}",
+        f"api/v1/projects/{project_id}",
         headers=headers,
     )
     assert delete_response.status_code == 204
 
     # Verify project is indeed deleted
     get_after_delete = client.get(
-        f"/projects/{project_id}",
+        f"api/v1/projects/{project_id}",
         headers=headers,
     )
     assert get_after_delete.status_code == 404

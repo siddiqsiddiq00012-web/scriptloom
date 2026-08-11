@@ -66,7 +66,7 @@ class ClipExtractionService:
                 "-c:v",
                 "libx264",
                 "-preset",
-                "medium",
+                "veryfast",
                 "-crf",
                 "23",
                 "-c:a",

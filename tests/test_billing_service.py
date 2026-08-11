@@ -30,14 +30,14 @@ def test_billing_and_quota_flow():
     headers = {"Authorization": f"Bearer {token}"}
 
     print("\n--- 1. Fetching Initial Subscription & Usage ---")
-    sub_res = client.get("/billing/subscription", headers=headers)
+    sub_res = client.get("/api/v1/billing/subscription", headers=headers)
     print("Subscription Status:", sub_res.status_code)
     print("Subscription Output:", sub_res.json())
 
     assert sub_res.status_code == 200
     assert sub_res.json()["plan_name"] == "starter"
 
-    usage_res = client.get("/billing/usage", headers=headers)
+    usage_res = client.get("/api/v1/billing/usage", headers=headers)
     print("Usage Status:", usage_res.status_code)
     print("Usage Output:", usage_res.json())
 
@@ -46,7 +46,7 @@ def test_billing_and_quota_flow():
 
     print("\n--- 2. Upgrading Subscription to Founder Pro ($49/mo) ---")
     upgrade_res = client.post(
-        "/billing/upgrade",
+        "api/v1/billing/upgrade",
         json={"plan_name": "founder_pro"},
         headers=headers,
     )
@@ -57,7 +57,7 @@ def test_billing_and_quota_flow():
     assert upgrade_res.json()["plan_name"] == "founder_pro"
 
     print("\n--- 3. Verifying Expanded Limits ---")
-    updated_usage = client.get("/billing/usage", headers=headers)
+    updated_usage = client.get("/api/v1/billing/usage", headers=headers)
     print("Updated Usage Limit:", updated_usage.json()["hours_limit"])
     assert updated_usage.json()["hours_limit"] == 50.0
 

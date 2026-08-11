@@ -79,6 +79,7 @@ def _set_csrf_cookie(response: Response):
 
 def _build_token_response(response: Response, user: User, access_token: str, refresh_token: str) -> TokenResponse:
     _set_auth_cookie(response, access_token)
+    _set_csrf_cookie(response)
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,

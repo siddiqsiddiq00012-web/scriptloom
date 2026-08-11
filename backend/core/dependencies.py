@@ -3,7 +3,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from backend.core.config import settings
-from backend.core.token import verify_access_token
+from backend.core.token import extract_access_token, verify_access_token
 from backend.db.dependencies import get_db
 from backend.repositories.user_repository import UserRepository
 from backend.models.user import User
@@ -19,17 +19,6 @@ oauth2_scheme = OAuth2PasswordBearer(
     auto_error=False,
 )
 
-COOKIE_NAME = "access_token"
-
-
-def _extract_token(request: Request) -> str | None:
-    """Extract the JWT from the httpOnly cookie or the Authorization header."""
-    auth_header = request.headers.get("Authorization")
-    if auth_header and auth_header.startswith("Bearer "):
-        return auth_header[7:].strip()
-
-    return request.cookies.get(COOKIE_NAME)
-
 
 def get_current_user(
     request: Request,
@@ -41,7 +30,7 @@ def get_current_user(
         detail="Could not validate credentials",
     )
 
-    resolved_token = token or _extract_token(request)
+    resolved_token = token or extract_access_token(request)
     if resolved_token is None:
         raise credentials_exception
 

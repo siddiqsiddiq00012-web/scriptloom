@@ -38,7 +38,7 @@ def test_transcript_engine_flow():
     print("\n--- 1. Uploading Audio File for STT Testing ---")
     dummy_wav_header = b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80\x3e\x00\x00\x00\x7d\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00"
     upload_res = client.post(
-        f"/projects/{project.id}/media",
+        f"api/v1/projects/{project.id}/media",
         files={"file": ("masterclass_speech.wav", dummy_wav_header, "audio/wav")},
         headers=headers,
     )
@@ -50,7 +50,7 @@ def test_transcript_engine_flow():
 
     print("\n--- 2. Triggering Speech-to-Text & Topic Segmentation ---")
     with patch("backend.processing.stt_engine.STTEngine.transcribe", return_value=MOCK_STT_RESPONSE):
-        transcribe_res = client.post(f"/media/{media_id}/transcribe", headers=headers)
+        transcribe_res = client.post(f"/api/v1/media/{media_id}/transcribe", headers=headers)
     print("Transcribe Status:", transcribe_res.status_code)
     print("Transcribe Output:", transcribe_res.json()["summary"])
 
@@ -65,7 +65,7 @@ def test_transcript_engine_flow():
     print("First Segment Text:", first_segment["text"])
 
     print("\n--- 3. Fetching Diarized Transcript ---")
-    get_res = client.get(f"/media/{media_id}/transcript", headers=headers)
+    get_res = client.get(f"/api/v1/media/{media_id}/transcript", headers=headers)
     print("Get Transcript Status:", get_res.status_code)
     assert get_res.status_code == 200
     assert len(get_res.json()["segments"]) == len(data["segments"])
@@ -75,7 +75,7 @@ def test_transcript_engine_flow():
     new_text = "Every single executive founder and product leader spends hours articulating domain positioning."
 
     update_res = client.put(
-        f"/transcripts/segments/{segment_id}",
+        f"api/v1/transcripts/segments/{segment_id}",
         json={
             "speaker_label": new_speaker,
             "text": new_text,

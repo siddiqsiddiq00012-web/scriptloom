@@ -8,6 +8,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 from backend.core.config import settings
+from backend.core.token import extract_access_token
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +163,7 @@ class RateLimiterMiddleware(BaseHTTPMiddleware):
         elif "/generation" in path and request.method == "POST":
             max_reqs = settings.RATE_LIMIT_AI
             tier_name = "ai"
-        elif "Authorization" in request.headers:
+        elif extract_access_token(request) is not None:
             max_reqs = settings.RATE_LIMIT_AUTHENTICATED
             tier_name = "authenticated"
         else:

@@ -40,7 +40,7 @@ def test_generation_engine_flow():
     print("\n--- 1. Uploading Audio File & Transcribing ---")
     dummy_wav_header = b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80\x3e\x00\x00\x00\x7d\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00"
     upload_res = client.post(
-        f"/projects/{project_id}/media",
+        f"api/v1/projects/{project_id}/media",
         files={"file": ("masterclass_talk.wav", dummy_wav_header, "audio/wav")},
         headers=headers,
     )
@@ -50,12 +50,12 @@ def test_generation_engine_flow():
     from unittest.mock import patch
     from tests.mock_stt_data import MOCK_STT_RESPONSE
     with patch("backend.processing.stt_engine.STTEngine.transcribe", return_value=MOCK_STT_RESPONSE):
-        client.post(f"/media/{media_id}/transcribe", headers=headers)
+        client.post(f"/api/v1/media/{media_id}/transcribe", headers=headers)
         
-    client.post(f"/creator-memory/index/{media_id}", headers=headers)
+    client.post(f"/api/v1/creator-memory/index/{media_id}", headers=headers)
 
     print("\n--- 2. Triggering Multi-Platform Campaign Pack Generation ---")
-    gen_res = client.post(f"/generation/campaign-pack/{media_id}", headers=headers)
+    gen_res = client.post(f"/api/v1/generation/campaign-pack/{media_id}", headers=headers)
     print("Generation Status:", gen_res.status_code)
     print("Generated Assets Count:", gen_res.json()["count"])
 
@@ -80,7 +80,7 @@ def test_generation_engine_flow():
     print("Zero-slop verification PASSED! No banned jargon found.")
 
     print("\n--- 4. Fetching Campaign Pack Assets ---")
-    get_res = client.get(f"/generation/campaign-pack/{media_id}", headers=headers)
+    get_res = client.get(f"/api/v1/generation/campaign-pack/{media_id}", headers=headers)
     print("Get Pack Status:", get_res.status_code)
     assert get_res.status_code == 200
     assert get_res.json()["count"] == 4
@@ -89,7 +89,7 @@ def test_generation_engine_flow():
     first_asset_id = assets[0]["id"]
     new_title = "LinkedIn Carousel: Spoken Expertise Moat (Edited)"
     edit_res = client.put(
-        f"/generation/content/{first_asset_id}",
+        f"api/v1/generation/content/{first_asset_id}",
         json={"title": new_title},
         headers=headers,
     )

@@ -1,8 +1,20 @@
 from datetime import datetime, timedelta, timezone
 
 from jose import JWTError, jwt
+from starlette.requests import Request
 
 from backend.core.config import settings
+
+ACCESS_TOKEN_COOKIE_NAME = "access_token"
+
+
+def extract_access_token(request: Request) -> str | None:
+    """Extract the JWT from the httpOnly cookie or the Authorization header."""
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        return auth_header[7:].strip()
+
+    return request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)
 
 
 def _get_algorithm() -> str:

@@ -160,7 +160,7 @@ def test_api_local_storage_transcription_success():
     }
 
     with patch("backend.processing.stt_engine.STTEngine.transcribe", return_value=mock_result) as mock_stt:
-        response = client.post(f"/media/{media_id}/transcribe", headers=headers)
+        response = client.post(f"/api/v1/media/{media_id}/transcribe", headers=headers)
         assert response.status_code == 201
         
         # Verify STTEngine received materialized path (which is the actual disk path)
@@ -264,7 +264,7 @@ def test_api_r2_storage_transcription_success(mock_boto_client):
 
     try:
         with patch.object(STTEngine, "transcribe", transcribe_capture):
-            response = client.post(f"/media/{media_id}/transcribe", headers=headers)
+            response = client.post(f"/api/v1/media/{media_id}/transcribe", headers=headers)
             assert response.status_code == 201
 
         # Verify that R2 temporary materialized file was cleaned up/deleted
@@ -345,7 +345,7 @@ def test_api_r2_storage_materialization_cleanup_on_failure(mock_boto_client):
 
     try:
         with patch.object(STTEngine, "transcribe", transcribe_raise):
-            response = client.post(f"/media/{media_id}/transcribe", headers=headers)
+            response = client.post(f"/api/v1/media/{media_id}/transcribe", headers=headers)
             assert response.status_code == 422
 
         # Verify R2 temporary file was cleaned up even after the exception
@@ -410,7 +410,7 @@ def test_unauthorized_user_blocked_before_materialize(mock_mat):
     token = create_access_token({"sub": str(user_b_id)})
     headers = {"Authorization": f"Bearer {token}"}
 
-    response = client.post(f"/media/{media_id}/transcribe", headers=headers)
+    response = client.post(f"/api/v1/media/{media_id}/transcribe", headers=headers)
     assert response.status_code == 404
     assert response.json()["detail"] == "Media not found."
 
@@ -463,7 +463,7 @@ def test_missing_storage_object_produces_404():
     headers = {"Authorization": f"Bearer {token}"}
 
     # API request
-    response = client.post(f"/media/{media_id}/transcribe", headers=headers)
+    response = client.post(f"/api/v1/media/{media_id}/transcribe", headers=headers)
     assert response.status_code == 404
     assert response.json()["detail"] == "Media file not found in storage."
 
@@ -513,7 +513,7 @@ def test_api_transcription_failure_db_state(mock_mat, mock_exists, mock_transcri
     token = create_access_token({"sub": str(user_id)})
     headers = {"Authorization": f"Bearer {token}"}
 
-    response = client.post(f"/media/{media_id}/transcribe", headers=headers)
+    response = client.post(f"/api/v1/media/{media_id}/transcribe", headers=headers)
     assert response.status_code == 422
     assert response.json()["detail"] == "Failed to transcribe media: No speech detected or invalid audio."
 

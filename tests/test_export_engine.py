@@ -41,7 +41,7 @@ def test_export_engine_flow():
     print("\n--- 1. Uploading Audio, Transcribing, & Generating Campaign Pack ---")
     dummy_wav_header = b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80\x3e\x00\x00\x00\x7d\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00"
     upload_res = client.post(
-        f"/projects/{project_id}/media",
+        f"api/v1/projects/{project_id}/media",
         files={"file": ("export_talk.wav", dummy_wav_header, "audio/wav")},
         headers=headers,
     )
@@ -50,14 +50,14 @@ def test_export_engine_flow():
     from unittest.mock import patch
     from tests.mock_stt_data import MOCK_STT_RESPONSE
     with patch("backend.processing.stt_engine.STTEngine.transcribe", return_value=MOCK_STT_RESPONSE):
-        client.post(f"/media/{media_id}/transcribe", headers=headers)
+        client.post(f"/api/v1/media/{media_id}/transcribe", headers=headers)
         
-    gen_res = client.post(f"/generation/campaign-pack/{media_id}", headers=headers)
+    gen_res = client.post(f"/api/v1/generation/campaign-pack/{media_id}", headers=headers)
     assets = gen_res.json()["assets"]
     first_asset_id = assets[0]["id"]
 
     print("\n--- 2. Testing Single Asset Markdown Export ---")
-    md_res = client.get(f"/export/content/{first_asset_id}?format=markdown", headers=headers)
+    md_res = client.get(f"/api/v1/export/content/{first_asset_id}?format=markdown", headers=headers)
     print("Markdown Export Status:", md_res.status_code)
     print("Content-Disposition Header:", md_res.headers.get("content-disposition"))
     assert md_res.status_code == 200
@@ -65,13 +65,13 @@ def test_export_engine_flow():
     assert len(md_res.content) > 0
 
     print("\n--- 3. Testing Single Asset Text Export ---")
-    txt_res = client.get(f"/export/content/{first_asset_id}?format=txt", headers=headers)
+    txt_res = client.get(f"/api/v1/export/content/{first_asset_id}?format=txt", headers=headers)
     print("TXT Export Status:", txt_res.status_code)
     assert txt_res.status_code == 200
     assert txt_res.headers["content-type"].startswith("text/plain")
 
     print("\n--- 4. Testing Bundled Campaign Pack ZIP Export ---")
-    zip_res = client.get(f"/export/campaign-pack/{media_id}", headers=headers)
+    zip_res = client.get(f"/api/v1/export/campaign-pack/{media_id}", headers=headers)
     print("ZIP Export Status:", zip_res.status_code)
     print("ZIP Header:", zip_res.headers.get("content-type"))
     assert zip_res.status_code == 200

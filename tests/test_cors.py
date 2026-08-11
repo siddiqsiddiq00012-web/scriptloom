@@ -13,7 +13,7 @@ client = TestClient(app)
 def test_cors_allowed_origin():
     # Make a request with an allowed origin
     headers = {"Origin": "http://localhost:5173"}
-    response = client.get("/", headers=headers)
+    response = client.get("/api/v1/", headers=headers)
     
     assert response.status_code == 200
     assert response.headers.get("access-control-allow-origin") == "http://localhost:5173"
@@ -23,7 +23,7 @@ def test_cors_allowed_origin():
 def test_cors_blocked_origin():
     # Make a request with an unauthorized origin
     headers = {"Origin": "http://malicious.com"}
-    response = client.get("/", headers=headers)
+    response = client.get("/api/v1/", headers=headers)
     
     assert response.status_code == 200
     # A blocked origin must NOT receive access-control-allow-origin header

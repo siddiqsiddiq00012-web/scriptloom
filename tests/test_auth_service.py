@@ -16,7 +16,7 @@ def test_auth_and_user_flow():
 
     print("\n--- 1. Testing Registration ---")
     reg_response = client.post(
-        "/auth/register",
+        "api/v1/auth/register",
         json={
             "name": test_name,
             "email": test_email,
@@ -36,7 +36,7 @@ def test_auth_and_user_flow():
     headers = {"Authorization": f"Bearer {token}"}
 
     print("\n--- 2. Testing Authenticated /auth/me ---")
-    me_response = client.get("/auth/me", headers=headers)
+    me_response = client.get("/api/v1/auth/me", headers=headers)
     print("Me Status:", me_response.status_code)
     print("Me Output:", me_response.json())
 
@@ -46,7 +46,7 @@ def test_auth_and_user_flow():
     print("\n--- 3. Testing Profile Update /users/me ---")
     updated_name = "Sarah Jenkins (B2B Founder)"
     update_response = client.put(
-        "/users/me",
+        "api/v1/users/me",
         json={"name": updated_name},
         headers=headers,
     )
@@ -58,7 +58,7 @@ def test_auth_and_user_flow():
 
     print("\n--- 4. Testing Login ---")
     login_response = client.post(
-        "/auth/login",
+        "api/v1/auth/login",
         json={
             "email": test_email,
             "password": test_password,
@@ -72,7 +72,7 @@ def test_auth_and_user_flow():
 
     print("\n--- 5. Testing Invalid Credentials ---")
     invalid_login = client.post(
-        "/auth/login",
+        "api/v1/auth/login",
         json={
             "email": test_email,
             "password": "WrongPassword!",

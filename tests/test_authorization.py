@@ -124,24 +124,24 @@ def test_anonymous_requests_get_401(auth_users):
     c_id = auth_users["content_a_id"]
 
     # Try accessing endpoints without headers
-    assert client.get(f"/projects/{p_id}").status_code == 401
-    assert client.post(f"/projects/{p_id}/media").status_code == 401
-    assert client.get(f"/projects/media/{m_id}").status_code == 401
-    assert client.get(f"/projects/media/{m_id}/waveform").status_code == 401
-    assert client.delete(f"/projects/media/{m_id}").status_code == 401
-    assert client.post(f"/media/{m_id}/transcribe").status_code == 401
-    assert client.get(f"/media/{m_id}/transcript").status_code == 401
-    assert client.put(f"/transcripts/segments/{s_id}", json={"text": "hi"}).status_code == 401
-    assert client.get(f"/clips/project/{p_id}").status_code == 401
-    assert client.post(f"/creator-memory/index/{m_id}").status_code == 401
-    assert client.post(f"/generation/campaign-pack/{m_id}").status_code == 401
-    assert client.get(f"/generation/campaign-pack/{m_id}").status_code == 401
-    assert client.put(f"/generation/content/{c_id}", json={"title": "hi"}).status_code == 401
-    assert client.get(f"/export/content/{c_id}").status_code == 401
-    assert client.get(f"/export/campaign-pack/{m_id}").status_code == 401
-    assert client.post("/processing/process", json={"media_id": m_id}).status_code == 401
-    assert client.get("/processing/jobs/some-uuid").status_code == 401
-    assert client.get(f"/stream/progress/{m_id}").status_code == 401
+    assert client.get(f"/api/v1/projects/{p_id}").status_code == 401
+    assert client.post(f"/api/v1/projects/{p_id}/media").status_code == 401
+    assert client.get(f"/api/v1/projects/media/{m_id}").status_code == 401
+    assert client.get(f"/api/v1/projects/media/{m_id}/waveform").status_code == 401
+    assert client.delete(f"/api/v1/projects/media/{m_id}").status_code == 401
+    assert client.post(f"/api/v1/media/{m_id}/transcribe").status_code == 401
+    assert client.get(f"/api/v1/media/{m_id}/transcript").status_code == 401
+    assert client.put(f"/api/v1/transcripts/segments/{s_id}", json={"text": "hi"}).status_code == 401
+    assert client.get(f"/api/v1/clips/project/{p_id}").status_code == 401
+    assert client.post(f"/api/v1/creator-memory/index/{m_id}").status_code == 401
+    assert client.post(f"/api/v1/generation/campaign-pack/{m_id}").status_code == 401
+    assert client.get(f"/api/v1/generation/campaign-pack/{m_id}").status_code == 401
+    assert client.put(f"/api/v1/generation/content/{c_id}", json={"title": "hi"}).status_code == 401
+    assert client.get(f"/api/v1/export/content/{c_id}").status_code == 401
+    assert client.get(f"/api/v1/export/campaign-pack/{m_id}").status_code == 401
+    assert client.post("/api/v1/processing/process", json={"media_id": m_id}).status_code == 401
+    assert client.get("/api/v1/processing/jobs/some-uuid").status_code == 401
+    assert client.get(f"/api/v1/stream/progress/{m_id}").status_code == 401
 
 
 def test_user_a_can_access_own_resources(auth_users):
@@ -150,12 +150,12 @@ def test_user_a_can_access_own_resources(auth_users):
     m_id = auth_users["media_a_id"]
 
     # Verify User A can access their own project
-    response = client.get(f"/projects/{p_id}", headers=headers)
+    response = client.get(f"/api/v1/projects/{p_id}", headers=headers)
     assert response.status_code == 200
     assert response.json()["id"] == p_id
 
     # Verify User A can access their own media
-    response = client.get(f"/projects/media/{m_id}", headers=headers)
+    response = client.get(f"/api/v1/projects/media/{m_id}", headers=headers)
     assert response.status_code == 200
     assert response.json()["id"] == m_id
 
@@ -168,21 +168,21 @@ def test_user_b_receives_404_for_user_a_resources(auth_users):
     c_id = auth_users["content_a_id"]
 
     # User B should get 404 for User A's resources
-    assert client.get(f"/projects/{p_id}", headers=headers).status_code == 404
-    assert client.get(f"/projects/media/{m_id}", headers=headers).status_code == 404
-    assert client.get(f"/projects/media/{m_id}/waveform", headers=headers).status_code == 404
-    assert client.post(f"/media/{m_id}/transcribe", headers=headers).status_code == 404
-    assert client.get(f"/media/{m_id}/transcript", headers=headers).status_code == 404
-    assert client.put(f"/transcripts/segments/{s_id}", json={"text": "edited"}, headers=headers).status_code == 404
-    assert client.get(f"/clips/project/{p_id}", headers=headers).status_code == 404
-    assert client.post(f"/creator-memory/index/{m_id}", headers=headers).status_code == 404
-    assert client.post(f"/generation/campaign-pack/{m_id}", headers=headers).status_code == 404
-    assert client.get(f"/generation/campaign-pack/{m_id}", headers=headers).status_code == 404
-    assert client.put(f"/generation/content/{c_id}", json={"title": "hi"}, headers=headers).status_code == 404
-    assert client.get(f"/export/content/{c_id}", headers=headers).status_code == 404
-    assert client.get(f"/export/campaign-pack/{m_id}", headers=headers).status_code == 404
-    assert client.post("/processing/process", json={"media_id": m_id}, headers=headers).status_code == 404
-    assert client.get(f"/stream/progress/{m_id}", headers=headers).status_code == 404
+    assert client.get(f"/api/v1/projects/{p_id}", headers=headers).status_code == 404
+    assert client.get(f"/api/v1/projects/media/{m_id}", headers=headers).status_code == 404
+    assert client.get(f"/api/v1/projects/media/{m_id}/waveform", headers=headers).status_code == 404
+    assert client.post(f"/api/v1/media/{m_id}/transcribe", headers=headers).status_code == 404
+    assert client.get(f"/api/v1/media/{m_id}/transcript", headers=headers).status_code == 404
+    assert client.put(f"/api/v1/transcripts/segments/{s_id}", json={"text": "edited"}, headers=headers).status_code == 404
+    assert client.get(f"/api/v1/clips/project/{p_id}", headers=headers).status_code == 404
+    assert client.post(f"/api/v1/creator-memory/index/{m_id}", headers=headers).status_code == 404
+    assert client.post(f"/api/v1/generation/campaign-pack/{m_id}", headers=headers).status_code == 404
+    assert client.get(f"/api/v1/generation/campaign-pack/{m_id}", headers=headers).status_code == 404
+    assert client.put(f"/api/v1/generation/content/{c_id}", json={"title": "hi"}, headers=headers).status_code == 404
+    assert client.get(f"/api/v1/export/content/{c_id}", headers=headers).status_code == 404
+    assert client.get(f"/api/v1/export/campaign-pack/{m_id}", headers=headers).status_code == 404
+    assert client.post("/api/v1/processing/process", json={"media_id": m_id}, headers=headers).status_code == 404
+    assert client.get(f"/api/v1/stream/progress/{m_id}", headers=headers).status_code == 404
 
 
 def test_nonexistent_resource_produces_404(auth_users):
@@ -190,21 +190,21 @@ def test_nonexistent_resource_produces_404(auth_users):
     # Large nonexistent ID
     non_id = 999999
 
-    assert client.get(f"/projects/{non_id}", headers=headers).status_code == 404
-    assert client.get(f"/projects/media/{non_id}", headers=headers).status_code == 404
-    assert client.get(f"/projects/media/{non_id}/waveform", headers=headers).status_code == 404
-    assert client.post(f"/media/{non_id}/transcribe", headers=headers).status_code == 404
-    assert client.get(f"/media/{non_id}/transcript", headers=headers).status_code == 404
-    assert client.put(f"/transcripts/segments/{non_id}", json={"text": "hi"}, headers=headers).status_code == 404
-    assert client.get(f"/clips/project/{non_id}", headers=headers).status_code == 404
-    assert client.post(f"/creator-memory/index/{non_id}", headers=headers).status_code == 404
-    assert client.post(f"/generation/campaign-pack/{non_id}", headers=headers).status_code == 404
-    assert client.get(f"/generation/campaign-pack/{non_id}", headers=headers).status_code == 404
-    assert client.put(f"/generation/content/{non_id}", json={"title": "hi"}, headers=headers).status_code == 404
-    assert client.get(f"/export/content/{non_id}", headers=headers).status_code == 404
-    assert client.get(f"/export/campaign-pack/{non_id}", headers=headers).status_code == 404
-    assert client.post("/processing/process", json={"media_id": non_id}, headers=headers).status_code == 404
-    assert client.get(f"/stream/progress/{non_id}", headers=headers).status_code == 404
+    assert client.get(f"/api/v1/projects/{non_id}", headers=headers).status_code == 404
+    assert client.get(f"/api/v1/projects/media/{non_id}", headers=headers).status_code == 404
+    assert client.get(f"/api/v1/projects/media/{non_id}/waveform", headers=headers).status_code == 404
+    assert client.post(f"/api/v1/media/{non_id}/transcribe", headers=headers).status_code == 404
+    assert client.get(f"/api/v1/media/{non_id}/transcript", headers=headers).status_code == 404
+    assert client.put(f"/api/v1/transcripts/segments/{non_id}", json={"text": "hi"}, headers=headers).status_code == 404
+    assert client.get(f"/api/v1/clips/project/{non_id}", headers=headers).status_code == 404
+    assert client.post(f"/api/v1/creator-memory/index/{non_id}", headers=headers).status_code == 404
+    assert client.post(f"/api/v1/generation/campaign-pack/{non_id}", headers=headers).status_code == 404
+    assert client.get(f"/api/v1/generation/campaign-pack/{non_id}", headers=headers).status_code == 404
+    assert client.put(f"/api/v1/generation/content/{non_id}", json={"title": "hi"}, headers=headers).status_code == 404
+    assert client.get(f"/api/v1/export/content/{non_id}", headers=headers).status_code == 404
+    assert client.get(f"/api/v1/export/campaign-pack/{non_id}", headers=headers).status_code == 404
+    assert client.post("/api/v1/processing/process", json={"media_id": non_id}, headers=headers).status_code == 404
+    assert client.get(f"/api/v1/stream/progress/{non_id}", headers=headers).status_code == 404
 
 
 @patch("backend.storage.manager.storage.save_stream")
@@ -215,7 +215,7 @@ def test_unauthorized_upload_has_no_file_persistence(mock_metadata, mock_save, a
     p_id = auth_users["proj_a_id"]
 
     response = client.post(
-        f"/projects/{p_id}/media",
+        f"api/v1/projects/{p_id}/media",
         files={"file": ("malicious.wav", b"RIFF dummy bytes", "audio/wav")},
         headers=headers
     )
@@ -232,7 +232,7 @@ def test_unauthorized_transcribe_does_not_invoke_stt(mock_stt, auth_users):
     headers = auth_users["headers_b"]
     m_id = auth_users["media_a_id"]
 
-    response = client.post(f"/media/{m_id}/transcribe", headers=headers)
+    response = client.post(f"/api/v1/media/{m_id}/transcribe", headers=headers)
     assert response.status_code == 404
 
     # STTEngine must not be called
@@ -245,7 +245,7 @@ def test_unauthorized_process_does_not_invoke_pipeline(mock_process, auth_users)
     headers = auth_users["headers_b"]
     m_id = auth_users["media_a_id"]
 
-    response = client.post("/processing/process", json={"media_id": m_id}, headers=headers)
+    response = client.post("/api/v1/processing/process", json={"media_id": m_id}, headers=headers)
     assert response.status_code == 404
 
     # Pipeline background task must not be queued
@@ -258,7 +258,7 @@ def test_unauthorized_generation_does_not_invoke_ai(mock_gen, auth_users):
     headers = auth_users["headers_b"]
     m_id = auth_users["media_a_id"]
 
-    response = client.post(f"/generation/campaign-pack/{m_id}", headers=headers)
+    response = client.post(f"/api/v1/generation/campaign-pack/{m_id}", headers=headers)
     assert response.status_code == 404
 
     # AI generation should not be called
@@ -271,7 +271,7 @@ def test_unauthorized_export_does_not_read_files(mock_export, auth_users):
     headers = auth_users["headers_b"]
     c_id = auth_users["content_a_id"]
 
-    response = client.get(f"/export/content/{c_id}", headers=headers)
+    response = client.get(f"/api/v1/export/content/{c_id}", headers=headers)
     assert response.status_code == 404
 
     # Export engine should not be called
@@ -291,12 +291,12 @@ def test_processing_job_ownership_enforcement(auth_users):
         db.close()
 
     # User A can query it
-    response_a = client.get(f"/processing/jobs/{job_id}", headers=headers_a)
+    response_a = client.get(f"/api/v1/processing/jobs/{job_id}", headers=headers_a)
     assert response_a.status_code == 200
     assert response_a.json()["job_id"] == job_id
 
     # User B receives 404 for User A's job
-    response_b = client.get(f"/processing/jobs/{job_id}", headers=headers_b)
+    response_b = client.get(f"/api/v1/processing/jobs/{job_id}", headers=headers_b)
     assert response_b.status_code == 404
 
 
@@ -308,9 +308,9 @@ def test_cross_resource_nested_id_attacks_fail(auth_users):
 
     # Attempt to upload to Project B using Media A's references (or verify project boundaries)
     response = client.post(
-        f"/projects/{proj_b}/media",
+        f"api/v1/projects/{proj_b}/media",
         files={"file": ("hack.wav", b"RIFF dummy bytes", "audio/wav")},
         headers=headers
     )
     # User B owns Project B, so they can upload. But trying to access Media A directly:
-    assert client.get(f"/projects/media/{media_a}", headers=headers).status_code == 404
+    assert client.get(f"/api/v1/projects/media/{media_a}", headers=headers).status_code == 404

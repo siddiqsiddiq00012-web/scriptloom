@@ -98,7 +98,7 @@ class ProcessingService:
             if media is None:
                 raise RuntimeError("Media record not found.")
 
-            self._job_user_id = media.user_id
+            self._job_user_id = media.project.owner_id
             self._job_media_id = media.id
 
             publish_progress("started", {"media_id": media.id})

@@ -29,7 +29,7 @@ def test_concurrency_load_and_stress():
 
     print("\n--- 2. Testing 50 Concurrent HTTP Requests ---")
     def _make_req(idx):
-        res = client.get("/health")
+        res = client.get("/api/v1/health")
         return res.status_code
 
     start_http = time.time()

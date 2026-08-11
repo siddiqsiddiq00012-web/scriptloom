@@ -201,6 +201,7 @@ class ContentGenerator:
                     config=types.GenerateContentConfig(
                         temperature=0.85,
                         top_p=0.95,
+                        response_mime_type="application/json",
                     ),
                 )
 
@@ -293,6 +294,7 @@ class ContentGenerator:
                     config=types.GenerateContentConfig(
                         temperature=0.75,
                         top_p=0.90,
+                        response_mime_type="application/json",
                     ),
                 )
 

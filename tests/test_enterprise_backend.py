@@ -17,7 +17,7 @@ client = TestClient(app)
 
 def test_enterprise_backend_security_and_performance():
     print("\n--- 1. Testing OWASP Security Headers & X-Request-ID ---")
-    res = client.get("/health")
+    res = client.get("/api/v1/health")
     print("Health Status:", res.status_code)
     print("X-Request-ID Header:", res.headers.get("x-request-id"))
     print("X-Content-Type-Options Header:", res.headers.get("x-content-type-options"))
@@ -30,7 +30,7 @@ def test_enterprise_backend_security_and_performance():
     assert res.headers["x-frame-options"] == "DENY"
 
     print("\n--- 2. Testing Readiness Endpoint (/ready) ---")
-    ready_res = client.get("/ready")
+    ready_res = client.get("/api/v1/ready")
     print("Readiness Status:", ready_res.status_code)
     print("Readiness Body:", ready_res.json())
 

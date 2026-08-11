@@ -67,25 +67,25 @@ def test_webhook_endpoints_crud_and_ownership():
         "secret": "usera_secret_key_987",
         "subscribed_events": ["media.processing.started"],
     }
-    resp = client.post("/api/v1/webhooks/endpoints", json=endpoint_data, headers=headers_a)
+    resp = client.post("/api/v1/api/v1/webhooks/endpoints", json=endpoint_data, headers=headers_a)
     assert resp.status_code == 201
     endpoint_id = resp.json()["id"]
     assert resp.json()["url"] == endpoint_data["url"]
     assert "secret" not in resp.json()  # Never expose secrets through API responses
 
     # User A lists endpoints -> lists 1 endpoint
-    list_resp = client.get("/api/v1/webhooks/endpoints", headers=headers_a)
+    list_resp = client.get("/api/v1/api/v1/webhooks/endpoints", headers=headers_a)
     assert list_resp.status_code == 200
     assert len(list_resp.json()) == 1
     assert list_resp.json()[0]["id"] == endpoint_id
 
     # User B lists endpoints -> lists 0 endpoints
-    list_resp_b = client.get("/api/v1/webhooks/endpoints", headers=headers_b)
+    list_resp_b = client.get("/api/v1/api/v1/webhooks/endpoints", headers=headers_b)
     assert list_resp_b.status_code == 200
     assert len(list_resp_b.json()) == 0
 
     # User B queries User A's endpoint -> 404 Sanitized Resource Boundary Protection
-    get_resp_b = client.get(f"/api/v1/webhooks/endpoints/{endpoint_id}", headers=headers_b)
+    get_resp_b = client.get(f"/api/v1/api/v1/webhooks/endpoints/{endpoint_id}", headers=headers_b)
     assert get_resp_b.status_code == 404
     assert get_resp_b.json()["detail"] == "Webhook endpoint not found."
 
@@ -94,17 +94,17 @@ def test_webhook_endpoints_crud_and_ownership():
         "url": "https://callback.usera.com/new-path",
         "is_active": False,
     }
-    update_resp = client.put(f"/api/v1/webhooks/endpoints/{endpoint_id}", json=update_data, headers=headers_a)
+    update_resp = client.put(f"/api/v1/api/v1/webhooks/endpoints/{endpoint_id}", json=update_data, headers=headers_a)
     assert update_resp.status_code == 200
     assert update_resp.json()["url"] == update_data["url"]
     assert update_resp.json()["is_active"] is False
 
     # User B tries to delete User A's endpoint -> 404
-    del_resp_b = client.delete(f"/api/v1/webhooks/endpoints/{endpoint_id}", headers=headers_b)
+    del_resp_b = client.delete(f"/api/v1/api/v1/webhooks/endpoints/{endpoint_id}", headers=headers_b)
     assert del_resp_b.status_code == 404
 
     # User A deletes endpoint -> 204
-    del_resp_a = client.delete(f"/api/v1/webhooks/endpoints/{endpoint_id}", headers=headers_a)
+    del_resp_a = client.delete(f"/api/v1/api/v1/webhooks/endpoints/{endpoint_id}", headers=headers_a)
     assert del_resp_a.status_code == 204
 
 
@@ -463,7 +463,7 @@ def test_management_test_endpoint(mock_delay):
     headers = {"Authorization": f"Bearer {token}"}
 
     # Trigger endpoint test
-    resp = client.post(f"/api/v1/webhooks/endpoints/{ep_id}/test", headers=headers)
+    resp = client.post(f"/api/v1/api/v1/webhooks/endpoints/{ep_id}/test", headers=headers)
     assert resp.status_code == 202
     assert "delivery_id" in resp.json()
     delivery_id = resp.json()["delivery_id"]

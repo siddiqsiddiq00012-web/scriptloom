@@ -47,18 +47,18 @@ def test_media(db_session: Session, test_users):
     return media
 
 def test_get_latest_job_anonymous(client: TestClient, test_media):
-    response = client.get(f"/api/v1/processing/media/{test_media.id}/jobs/latest")
+    response = client.get(f"/api/v1/api/v1/processing/media/{test_media.id}/jobs/latest")
     assert response.status_code == 401
 
 def test_get_latest_job_no_job(client: TestClient, test_media, user_a_token):
     headers = {"Authorization": f"Bearer {user_a_token}"}
-    response = client.get(f"/api/v1/processing/media/{test_media.id}/jobs/latest", headers=headers)
+    response = client.get(f"/api/v1/api/v1/processing/media/{test_media.id}/jobs/latest", headers=headers)
     assert response.status_code == 404
     assert "No processing jobs found" in response.json()["detail"]
 
 def test_get_latest_job_unauthorized_user(client: TestClient, test_media, user_b_token):
     headers = {"Authorization": f"Bearer {user_b_token}"}
-    response = client.get(f"/api/v1/processing/media/{test_media.id}/jobs/latest", headers=headers)
+    response = client.get(f"/api/v1/api/v1/processing/media/{test_media.id}/jobs/latest", headers=headers)
     assert response.status_code == 403 # or 404 depending on verify_media_ownership sanitization
 
 def test_get_latest_job_success_multiple_jobs(client: TestClient, db_session: Session, test_media, test_users, user_a_token):
@@ -85,7 +85,7 @@ def test_get_latest_job_success_multiple_jobs(client: TestClient, db_session: Se
     db_session.commit()
 
     headers = {"Authorization": f"Bearer {user_a_token}"}
-    response = client.get(f"/api/v1/processing/media/{test_media.id}/jobs/latest", headers=headers)
+    response = client.get(f"/api/v1/api/v1/processing/media/{test_media.id}/jobs/latest", headers=headers)
     
     assert response.status_code == 200
     data = response.json()
